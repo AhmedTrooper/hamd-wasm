@@ -7,6 +7,7 @@ const features = [
   { id: 'encryption', label: 'Encryption', title: 'Encryption — AES-256-GCM' },
   { id: 'ttl', label: 'TTL', title: 'TTL — expiry & purge' },
   { id: 'binary', label: 'Binary', title: 'Binary — setBytes/getBytes' },
+  { id: 'validation', label: 'Validation', title: 'Validation — keys & TTL' },
   { id: 'sync', label: 'Sync', title: 'Sync — cross-tab' },
   { id: 'limits', label: 'Limits', title: 'Limits & quota' },
   { id: 'api', label: 'API', title: 'API — full surface' },
@@ -137,6 +138,16 @@ s.setBytes('enc', bytes, 60_000);
 // IndexedDb async, disk-backed
 await new IndexedDb().setBytes('file', bytes);`} />
             <p class="muted">String storages base64 __bin envelope +33%; guard &gt;4_800_000 → use IndexedDb. IndexedDB could be native zero-copy next.</p>
+          </Show>
+
+          <Show when={active() === 'validation'}>
+            <h2>Validation — keys & TTL</h2>
+            <CodeBlock code={`s.set('', 'x'); // → key must be non-empty
+s.set('a'.repeat(300), 'x'); // → key too long: max 256 bytes
+s.set('bad\\0key', 'x'); // → key contains invalid control characters
+s.set('k','v', NaN); // → ttlMs must be a positive finite number
+s.mset({a:1}); s.mget(['a']); // keys must be strings + validate_key`} />
+            <p class="muted">All key params via validate_key + ttlMs finite&gt;0; mget strict non-string → error.</p>
           </Show>
 
           <Show when={active() === 'sync'}>
