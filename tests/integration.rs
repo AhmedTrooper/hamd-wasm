@@ -1,17 +1,28 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use hamd_wasm::{Cookies, IndexedDb, Local, Memory, Session};
+use hamd_wasm::{Cookies, IndexedDb, Local, Memory, Session, StorageOptions};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
+fn storage_options(prefix: &str) -> StorageOptions {
+    let options = js_sys::Object::new();
+    js_sys::Reflect::set(
+        &options,
+        &JsValue::from_str("prefix"),
+        &JsValue::from_str(prefix),
+    )
+    .unwrap();
+    options.unchecked_into()
+}
+
 // ---- Memory backend: node-runnable (no DOM needed) ----
 
 #[wasm_bindgen_test]
 fn memory_set_get_roundtrip() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     let val = JsValue::from_str("hello");
     store.set("k1", val.clone(), None).unwrap();
     let got = store.get("k1").unwrap();
@@ -20,7 +31,7 @@ fn memory_set_get_roundtrip() {
 
 #[wasm_bindgen_test]
 fn memory_has_keys_length() {
-    let store = Memory::new(Some("test1:".into()));
+    let store = Memory::new(Some(storage_options("test1:"))).unwrap();
     assert_eq!(store.length().unwrap(), 0);
     store.set("a", JsValue::from_str("1"), None).unwrap();
     store.set("b", JsValue::from_str("2"), None).unwrap();
@@ -34,8 +45,8 @@ fn memory_has_keys_length() {
 
 #[wasm_bindgen_test]
 fn memory_clear_is_prefix_scoped() {
-    let a = Memory::new(Some("a:".into()));
-    let b = Memory::new(Some("b:".into()));
+    let a = Memory::new(Some(storage_options("a:"))).unwrap();
+    let b = Memory::new(Some(storage_options("b:"))).unwrap();
     a.set("x", JsValue::from_str("1"), None).unwrap();
     b.set("x", JsValue::from_str("2"), None).unwrap();
     a.clear().unwrap();
@@ -45,7 +56,7 @@ fn memory_clear_is_prefix_scoped() {
 
 #[wasm_bindgen_test]
 fn memory_remove_and_get_missing_returns_null() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     store.set("k", JsValue::from_str("v"), None).unwrap();
     store.remove("k").unwrap();
     assert!(store.get("k").unwrap().is_null());
@@ -54,7 +65,7 @@ fn memory_remove_and_get_missing_returns_null() {
 
 #[wasm_bindgen_test]
 fn memory_has_counts_stored_null_as_present() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     store.set("null", JsValue::NULL, None).unwrap();
     assert!(store.has("null").unwrap());
     assert!(store.get("null").unwrap().is_null());
@@ -62,7 +73,7 @@ fn memory_has_counts_stored_null_as_present() {
 
 #[wasm_bindgen_test]
 fn memory_mset_mget() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     let obj = js_sys::Object::new();
     js_sys::Reflect::set(&obj, &JsValue::from_str("a"), &JsValue::from_str("1")).unwrap();
     js_sys::Reflect::set(&obj, &JsValue::from_str("b"), &JsValue::from_str("2")).unwrap();
@@ -88,7 +99,7 @@ fn memory_mset_mget() {
 
 #[wasm_bindgen_test]
 fn memory_mset_validates_all_keys_before_writing() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     let obj = js_sys::Object::new();
     js_sys::Reflect::set(
         &obj,
@@ -104,7 +115,7 @@ fn memory_mset_validates_all_keys_before_writing() {
 
 #[wasm_bindgen_test]
 fn memory_ttl_validation_rejects_invalid() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     let err = store
         .set("k", JsValue::from_str("v"), Some(f64::NAN))
         .unwrap_err();
@@ -121,7 +132,7 @@ fn memory_ttl_validation_rejects_invalid() {
 
 #[wasm_bindgen_test]
 fn memory_object_roundtrip() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     let val = js_sys::Object::new();
     js_sys::Reflect::set(
         &val,
@@ -143,7 +154,7 @@ fn memory_object_roundtrip() {
 
 #[wasm_bindgen_test]
 fn memory_preserves_objects_with_expiration_like_fields() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     let val = js_sys::Object::new();
     js_sys::Reflect::set(&val, &JsValue::from_str("__exp"), &JsValue::from_f64(1.0)).unwrap();
     js_sys::Reflect::set(
@@ -167,7 +178,7 @@ fn memory_preserves_objects_with_expiration_like_fields() {
 
 #[wasm_bindgen_test]
 fn memory_encryption_roundtrip() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     let key = store.create_encryption_key().unwrap();
     assert_eq!(key.len(), 32);
     store
@@ -177,12 +188,12 @@ fn memory_encryption_roundtrip() {
     assert_eq!(got.as_string().unwrap(), "s3cr3t");
 
     // Different key must fail.
-    let other = Memory::new(None);
+    let other = Memory::new(None).unwrap();
     other.enable_encryption(&key).unwrap();
     // Same key can decrypt if we copy raw storage; we test wrong key path by
     // using a fresh random key on a clone of the encrypted payload.
     let wrong_key = other.create_encryption_key().unwrap();
-    let bad = Memory::new(None);
+    let bad = Memory::new(None).unwrap();
     bad.enable_encryption(&wrong_key).unwrap();
     // Direct crypto layer test: decrypt with wrong key fails.
     // We do not share raw ciphertext across instances here because
@@ -194,7 +205,7 @@ fn memory_encryption_roundtrip() {
 
 #[wasm_bindgen_test]
 fn local_encrypted_value_requires_key_browser_only() {
-    let encrypted = Local::new(Some("enc-required:".into()));
+    let encrypted = Local::new(Some(storage_options("enc-required:"))).unwrap();
     if encrypted
         .set("probe", JsValue::from_str("ok"), None)
         .is_err()
@@ -207,7 +218,7 @@ fn local_encrypted_value_requires_key_browser_only() {
         .set("secret", JsValue::from_str("value"), None)
         .unwrap();
 
-    let unconfigured = Local::new(Some("enc-required:".into()));
+    let unconfigured = Local::new(Some(storage_options("enc-required:"))).unwrap();
     let error = unconfigured.get("secret").unwrap_err();
     assert!(
         error
@@ -220,14 +231,14 @@ fn local_encrypted_value_requires_key_browser_only() {
 
 #[wasm_bindgen_test]
 fn memory_enable_encryption_validates_key_length() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     let err = store.enable_encryption(&[1, 2, 3]).unwrap_err();
     assert!(err.as_string().unwrap().contains("32 bytes"));
 }
 
 #[wasm_bindgen_test]
 fn memory_purge_expired_sweeps() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     // Real TTL would need timers; we verify purgeExpired doesn't throw
     // and that non-expired entries survive.
     store.set("keep", JsValue::from_str("yes"), None).unwrap();
@@ -240,7 +251,7 @@ fn memory_purge_expired_sweeps() {
 #[wasm_bindgen_test]
 fn local_roundtrip_browser_only() {
     // Skip assertion if window/storage unavailable (e.g. node without jsdom).
-    let Ok(store) = std::panic::catch_unwind(|| Local::new(None)) else {
+    let Ok(store) = std::panic::catch_unwind(|| Local::new(None).unwrap()) else {
         return;
     };
     // If construction succeeded, exercise basic ops; quota/denied errors are
@@ -323,7 +334,7 @@ async fn sleep_ms(ms: i32) {
 
 #[wasm_bindgen_test]
 async fn memory_ttl_expiry_via_sleep() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     store
         .set("short", JsValue::from_str("tmp"), Some(40.0))
         .unwrap();
@@ -335,7 +346,7 @@ async fn memory_ttl_expiry_via_sleep() {
 
 #[wasm_bindgen_test]
 async fn memory_mset_with_ttl_expiry() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     let obj = js_sys::Object::new();
     js_sys::Reflect::set(&obj, &JsValue::from_str("x"), &JsValue::from_str("1")).unwrap();
     js_sys::Reflect::set(&obj, &JsValue::from_str("y"), &JsValue::from_str("2")).unwrap();
@@ -350,7 +361,7 @@ async fn memory_mset_with_ttl_expiry() {
 
 #[wasm_bindgen_test]
 fn session_roundtrip_browser_only() {
-    let Ok(store) = std::panic::catch_unwind(|| Session::new(None)) else {
+    let Ok(store) = std::panic::catch_unwind(|| Session::new(None).unwrap()) else {
         return;
     };
     if store.set("probe", JsValue::from_str("ok"), None).is_err() {
@@ -366,7 +377,7 @@ fn session_roundtrip_browser_only() {
 
 #[wasm_bindgen_test]
 fn cookies_roundtrip_browser_only() {
-    let Ok(store) = std::panic::catch_unwind(|| Cookies::new(None)) else {
+    let Ok(store) = std::panic::catch_unwind(|| Cookies::new(None).unwrap()) else {
         return;
     };
     // Cookies may be denied in headless file:// context — treat Err as skip.
@@ -385,7 +396,9 @@ fn cookies_roundtrip_browser_only() {
 
 #[wasm_bindgen_test]
 fn cookies_support_encoded_prefixes_and_keys_browser_only() {
-    let Ok(store) = std::panic::catch_unwind(|| Cookies::new(Some("app name/☃:".into()))) else {
+    let Ok(Ok(store)) =
+        std::panic::catch_unwind(|| Cookies::new(Some(storage_options("app name/☃:"))))
+    else {
         return;
     };
     if store
@@ -403,8 +416,8 @@ fn cookies_support_encoded_prefixes_and_keys_browser_only() {
 
 #[wasm_bindgen_test]
 async fn memory_sync_notifies_subscriber() {
-    let a = Memory::new(Some("sync-test:".into()));
-    let b = Memory::new(Some("sync-test:".into()));
+    let a = Memory::new(Some(storage_options("sync-test:"))).unwrap();
+    let b = Memory::new(Some(storage_options("sync-test:"))).unwrap();
     let flag = Rc::new(RefCell::new(false));
     let flag_clone = flag.clone();
     let closure =
@@ -426,7 +439,7 @@ async fn memory_sync_notifies_subscriber() {
 
 #[wasm_bindgen_test]
 fn sync_unsubscribe_returns_callable() {
-    let store = Memory::new(Some("sync-unsub:".into()));
+    let store = Memory::new(Some(storage_options("sync-unsub:"))).unwrap();
     let closure = wasm_bindgen::closure::Closure::wrap(
         Box::new(move |_: JsValue, _: JsValue| {}) as Box<dyn FnMut(JsValue, JsValue)>
     );
@@ -441,7 +454,8 @@ fn sync_unsubscribe_returns_callable() {
 #[wasm_bindgen_test]
 fn local_encryption_wrong_key_fails_browser_only() {
     let prefix = "enc-wrong:".to_string();
-    let Ok(store1) = std::panic::catch_unwind(|| Local::new(Some(prefix.clone()))) else {
+    let Ok(Ok(store1)) = std::panic::catch_unwind(|| Local::new(Some(storage_options(&prefix))))
+    else {
         return;
     };
     // Ensure storage available
@@ -453,7 +467,7 @@ fn local_encryption_wrong_key_fails_browser_only() {
     store1
         .set("secret2", JsValue::from_str("s3cr3t"), None)
         .unwrap();
-    let store2 = Local::new(Some(prefix.clone()));
+    let store2 = Local::new(Some(storage_options(&prefix))).unwrap();
     let _wrong = store2.create_encryption_key().unwrap();
     let result = store2.get("secret2");
     assert!(result.is_err());
@@ -470,7 +484,7 @@ fn local_encryption_wrong_key_fails_browser_only() {
 
 #[wasm_bindgen_test]
 fn memory_bytes_roundtrip() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     let data = vec![0u8, 1, 2, 255, 128, 0, 42];
     store.set_bytes("bin", &data, None).unwrap();
     let got = store.get_bytes("bin").unwrap().unwrap();
@@ -480,7 +494,7 @@ fn memory_bytes_roundtrip() {
 
 #[wasm_bindgen_test]
 fn memory_get_bytes_rejects_similar_user_objects() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     let object = js_sys::Object::new();
     js_sys::Reflect::set(&object, &JsValue::from_str("__bin"), &JsValue::TRUE).unwrap();
     js_sys::Reflect::set(
@@ -495,7 +509,7 @@ fn memory_get_bytes_rejects_similar_user_objects() {
 
 #[wasm_bindgen_test]
 fn memory_bytes_encrypted_roundtrip() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     let key = store.create_encryption_key().unwrap();
     assert_eq!(key.len(), 32);
     let data = vec![10, 20, 30, 40, 50];
@@ -506,7 +520,7 @@ fn memory_bytes_encrypted_roundtrip() {
 
 #[wasm_bindgen_test]
 async fn memory_bytes_ttl_expiry() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     let data = vec![1, 2, 3];
     store.set_bytes("short_bin", &data, Some(40.0)).unwrap();
     assert!(store.get_bytes("short_bin").unwrap().is_some());
@@ -529,7 +543,7 @@ async fn indexeddb_bytes_roundtrip_browser_only() {
 
 #[wasm_bindgen_test]
 fn key_validation_rejects_empty_and_long() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     let err = store.set("", JsValue::from_str("v"), None).unwrap_err();
     assert!(err.as_string().unwrap().contains("non-empty"));
     let long = "a".repeat(300);
@@ -543,7 +557,7 @@ fn key_validation_rejects_empty_and_long() {
 
 #[wasm_bindgen_test]
 fn key_validation_limits_utf8_bytes() {
-    let store = Memory::new(None);
+    let store = Memory::new(None).unwrap();
     let key = "☃".repeat(86); // 258 UTF-8 bytes, despite 86 Unicode scalar values.
     let error = store
         .set(&key, JsValue::from_str("value"), None)

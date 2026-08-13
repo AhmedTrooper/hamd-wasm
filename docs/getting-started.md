@@ -8,7 +8,7 @@ npm install @ahmedtrooper/hamd-wasm
 
 ```ts
 import { Local, Memory, IndexedDb } from '@ahmedtrooper/hamd-wasm';
-const s = new Local('myapp:');
+const s = new Local({ prefix: 'myapp:' });
 s.set('user', { name: 'Alice' });
 s.get('user'); // → {name:'Alice'}
 
@@ -16,4 +16,4 @@ s.get('user'); // → {name:'Alice'}
 const db = new IndexedDb({ prefix: 'myapp:', databaseName: 'myapp-storage' });
 await db.set('sess', { token: 'abc' });
 ```
-Prefixes isolate: `new Local('a:')` and `new Local('b:')` never collide. SSR uses `Memory`.
+Prefixes isolate: `new Local({ prefix: 'a:' })` and `new Local({ prefix: 'b:' })` never collide. SSR uses `Memory`.

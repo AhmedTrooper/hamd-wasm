@@ -22,14 +22,20 @@ const BINARY_MARKER: &str = "hamd:bin:v1";
 
 #[wasm_bindgen(typescript_custom_section)]
 const TYPESCRIPT_TYPES: &str = r#"
-export interface IndexedDbOptions {
+export interface StorageOptions {
   prefix?: string;
+}
+
+export interface IndexedDbOptions extends StorageOptions {
   databaseName?: string;
 }
 "#;
 
 #[wasm_bindgen]
 extern "C" {
+    #[wasm_bindgen(typescript_type = "StorageOptions")]
+    pub type StorageOptions;
+
     #[wasm_bindgen(typescript_type = "IndexedDbOptions")]
     pub type IndexedDbOptions;
 }
@@ -85,15 +91,21 @@ macro_rules! impl_storage {
             // not cross-thread sharing, so the !Send JS handle types inside are fine.
             #[allow(clippy::arc_with_non_send_sync)]
             #[wasm_bindgen(constructor)]
-            pub fn new(prefix: Option<String>) -> Self {
-                Self {
+            pub fn new(options: Option<StorageOptions>) -> Result<Self, JsValue> {
+                let default_options = JsValue::UNDEFINED;
+                let options = options
+                    .as_ref()
+                    .map(AsRef::<JsValue>::as_ref)
+                    .unwrap_or(&default_options);
+                let prefix = option_string(options, "prefix")?;
+                Ok(Self {
                     state: Arc::new(Mutex::new($InnerName {
                         backend: $backend_init,
                         prefix: prefix.unwrap_or_else(|| "hamd:".into()),
                         encryption_key: None,
                         sync: sync::SyncState::new($sync_kind),
                     })),
-                }
+                })
             }
 
             #[wasm_bindgen(js_name = "enableEncryption")]

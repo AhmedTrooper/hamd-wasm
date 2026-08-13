@@ -9,7 +9,7 @@
 ```ts
 import { Local, IndexedDb } from '@ahmedtrooper/hamd-wasm';
 
-const store = new Local('myapp:');
+const store = new Local({ prefix: 'myapp:' });
 store.set('user', { name: 'Alice', id: 101 });
 store.get('user'); // → { name: 'Alice', id: 101 }
 
@@ -64,17 +64,17 @@ wasm-pack build --target bundler --release --scope ahmedtrooper # pkg/ 188K wasm
 
 | Type | Backed by | Sync / Async | Best for | Limit |
 | --- | --- | --- | --- | --- |
-| `new Local(prefix?)` | `window.localStorage` | sync | app data that survives restarts | ~5MB string (~3.6MB binary base64). Quota → purge expired retry |
-| `new Session(prefix?)` | `window.sessionStorage` | sync | tab-only data | ~5MB |
-| `new Cookies(prefix?)` | `document.cookie` | sync | server-readable tiny tokens | 4KB per cookie (`3900` guard, `SameSite=Lax`, `Secure` on https) |
-| `new Memory(prefix?)` | `HashMap` | sync | SSR, tests, fallback when `window` missing | unbounded |
+| `new Local(options?)` | `window.localStorage` | sync | app data that survives restarts | ~5MB string (~3.6MB binary base64). Quota → purge expired retry |
+| `new Session(options?)` | `window.sessionStorage` | sync | tab-only data | ~5MB |
+| `new Cookies(options?)` | `document.cookie` | sync | server-readable tiny tokens | 4KB per cookie (`SameSite=Lax`, `Secure` on https) |
+| `new Memory(options?)` | `HashMap` | sync | SSR, tests, fallback when `window` missing | unbounded |
 | `new IndexedDb(prefix?)` | `IndexedDB` `hamd v1 kv` | **async** (`Promise`) | files, images, large data | disk ~50% (GBs) |
 
-All take an optional `prefix` (`hamd:` default) to isolate: `new Local('app:')` and `new Local('admin:')` never collide, `clear()` only deletes its prefix.
+All take an optional `prefix` (`hamd:` default) to isolate: `new Local({ prefix: 'app:' })` and `new Local({ prefix: 'admin:' })` never collide, `clear()` only deletes its prefix.
 
 ```ts
-const a = new Local('app:');
-const b = new Local('admin:');
+const a = new Local({ prefix: 'app:' });
+const b = new Local({ prefix: 'admin:' });
 a.set('x', 1); b.set('x', 2);
 a.clear(); // b still has 'x'
 ```
@@ -85,12 +85,12 @@ a.clear(); // b still has 'x'
 
 Every type implements the same names. `IndexedDb` returns `Promise` for storage ops; constructors, `enableEncryption`/`createEncryptionKey`, `subscribe` stay sync.
 
-### `new Type(prefix?)`
+### `new Type(options?)`
 
 ```ts
 const s1 = new Local();            // prefix "hamd:"
-const s2 = new Local('myapp:');    // custom
-const s3 = new Session(null);      // also "hamd:"
+const s2 = new Local({ prefix: 'myapp:' });    // custom
+const s3 = new Session();      // also "hamd:"
 ```
 
 * `prefix` if `null/undefined` → `"hamd:"`. Use per feature: `orders:`, `auth:`.
@@ -192,7 +192,7 @@ s.setBytes('enc', new Uint8Array([1,2,3])); // also encrypted (encrypts the bina
 ### `subscribe(cb)` → `unsubscribe()` — cross-tab sync
 
 ```ts
-const s = new Local('app:');
+const s = new Local({ prefix: 'app:' });
 const off = s.subscribe((action, key) => {
   // action: "set" | "remove" | "clear",  key: string ("" for clear)
   console.log(action, key);
