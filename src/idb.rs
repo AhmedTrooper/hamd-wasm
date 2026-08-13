@@ -49,7 +49,7 @@ pub(crate) async fn open_db() -> Result<web_sys::IdbDatabase, String> {
             return;
         };
         let db: web_sys::IdbDatabase = result.unchecked_into();
-        if db.object_store_names().length() == 0 {
+        if !db.object_store_names().contains(STORE_NAME) {
             let _ = db.create_object_store(STORE_NAME);
         }
     });
