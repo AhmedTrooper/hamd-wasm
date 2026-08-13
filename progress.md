@@ -34,6 +34,6 @@ All state wrapped in `Arc<Mutex<…>>` (parking_lot) for thread safety across We
 
 ## TODO
 
-- [ ] wasm-pack build + npm packaging
-- [ ] Integration tests (wasm-bindgen-test)
-- [ ] Publish to crates.io and npm
+- [x] wasm-pack build + npm packaging (pkg/ via wasm-pack --target bundler --release, wasm-opt -Oz)
+- [x] Integration tests (wasm-bindgen-test, 19 tests: Memory/Session/Cookies/Local/IndexedDb, TTL expiry, sync, encryption)
+- [ ] Publish to crates.io and npm (requires CARGO_REGISTRY_TOKEN + NPM_TOKEN, `cargo publish --dry-run` + `wasm-pack pack` ready)
