@@ -33,6 +33,23 @@ fn validate_key(key: &str) -> Result<(), JsValue> {
     Ok(())
 }
 
+fn option_string(options: &JsValue, name: &str) -> Result<Option<String>, JsValue> {
+    if options.is_null() || options.is_undefined() {
+        return Ok(None);
+    }
+    if !options.is_object() {
+        return Err(JsValue::from_str("options must be an object"));
+    }
+    let value = js_sys::Reflect::get(options, &JsValue::from_str(name))?;
+    if value.is_null() || value.is_undefined() {
+        return Ok(None);
+    }
+    value
+        .as_string()
+        .map(Some)
+        .ok_or_else(|| JsValue::from_str(&format!("options.{name} must be a string")))
+}
+
 macro_rules! impl_storage {
     ($Name:ident, $InnerName:ident, $Backend:ty, $backend_init:expr, $sync_kind:expr) => {
         struct $InnerName {
@@ -483,16 +500,10 @@ impl IndexedDb {
     // not cross-thread sharing, so the !Send JS handle types inside are fine.
     #[allow(clippy::arc_with_non_send_sync)]
     #[wasm_bindgen(constructor)]
-    pub fn new(prefix: Option<String>) -> Self {
-        Self::with_database(prefix, None)
-    }
-
-    // wasm32 is single-threaded; Arc here is shared ownership across JS handles,
-    // not cross-thread sharing, so the !Send JS handle types inside are fine.
-    #[allow(clippy::arc_with_non_send_sync)]
-    #[wasm_bindgen(js_name = "withDatabase")]
-    pub fn with_database(prefix: Option<String>, database_name: Option<String>) -> Self {
-        Self {
+    pub fn new(options: JsValue) -> Result<Self, JsValue> {
+        let prefix = option_string(&options, "prefix")?;
+        let database_name = option_string(&options, "databaseName")?;
+        Ok(Self {
             state: Arc::new(Mutex::new(IndexedDbInner {
                 backend: idb::IdbBackend::new(),
                 database_name: database_name.unwrap_or_else(|| "hamd".into()),
@@ -500,7 +511,7 @@ impl IndexedDb {
                 encryption_key: None,
                 sync: sync::SyncState::new("indexeddb"),
             })),
-        }
+        })
     }
 
     #[wasm_bindgen(js_name = "enableEncryption")]
