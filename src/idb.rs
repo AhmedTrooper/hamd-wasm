@@ -101,6 +101,30 @@ pub(crate) async fn raw_set(
     Ok(())
 }
 
+pub(crate) async fn raw_mset(
+    db: &web_sys::IdbDatabase,
+    entries: &[(String, String)],
+) -> Result<(), StorageError> {
+    if entries.is_empty() {
+        return Ok(());
+    }
+    let tx = db
+        .transaction_with_str_and_mode(STORE_NAME, web_sys::IdbTransactionMode::Readwrite)
+        .map_err(idb_err)?;
+    let store = tx.object_store(STORE_NAME).map_err(idb_err)?;
+    let mut requests = Vec::with_capacity(entries.len());
+    for (key, value) in entries {
+        let req = store
+            .put_with_key(&JsValue::from_str(value), &JsValue::from_str(key))
+            .map_err(idb_err)?;
+        requests.push(JsFuture::from(request_promise(&req)));
+    }
+    for request in requests {
+        request.await.map_err(idb_err)?;
+    }
+    Ok(())
+}
+
 pub(crate) async fn raw_get(
     db: &web_sys::IdbDatabase,
     key: &str,

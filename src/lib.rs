@@ -640,7 +640,15 @@ impl IndexedDb {
     }
 
     pub async fn mset(&self, entries: js_sys::Object, ttl_ms: Option<f64>) -> Result<(), JsValue> {
+        if let Some(ms) = ttl_ms
+            && (!ms.is_finite() || ms <= 0.0)
+        {
+            return Err(JsValue::from_str("ttlMs must be a positive finite number"));
+        }
         let pairs = js_sys::Object::entries(&entries);
+        let prefix = self.state.lock().prefix.clone();
+        let mut prepared = Vec::with_capacity(pairs.length() as usize);
+        let mut user_keys = Vec::with_capacity(pairs.length() as usize);
         for i in 0..pairs.length() {
             let pair: js_sys::Array = pairs.get(i).unchecked_into();
             let key = pair
@@ -648,14 +656,25 @@ impl IndexedDb {
                 .as_string()
                 .ok_or_else(|| JsValue::from_str("mset keys must be strings"))?;
             validate_key(&key)?;
+            let json: String = js_sys::JSON::stringify(&pair.get(1))?.into();
+            let payload = match ttl_ms {
+                Some(ms) => envelope::wrap(&json, ms)?,
+                None => json,
+            };
+            prepared.push((format!("{prefix}{key}"), self.encrypt_value(&payload)?));
+            user_keys.push(key);
         }
-        for i in 0..pairs.length() {
-            let pair: js_sys::Array = pairs.get(i).unchecked_into();
-            let key = pair
-                .get(0)
-                .as_string()
-                .ok_or_else(|| JsValue::from_str("mset keys must be strings"))?;
-            self.set(&key, pair.get(1), ttl_ms).await?;
+        let db = self.db().await?;
+        if let Err(error) = idb::raw_mset(&db, &prepared).await {
+            if !matches!(error, StorageError::QuotaExceeded) {
+                return Err(error.into());
+            }
+            self.purge_expired().await?;
+            idb::raw_mset(&db, &prepared).await.map_err(JsValue::from)?;
+        }
+        let guard = self.state.lock();
+        for key in user_keys {
+            guard.sync.notify("set", &prefix, &key);
         }
         Ok(())
     }
