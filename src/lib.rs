@@ -74,13 +74,18 @@ macro_rules! impl_storage {
                 Ok(())
             }
 
-            #[wasm_bindgen(js_name = "generateKey")]
-            pub fn generate_key(&self) -> Result<Vec<u8>, JsValue> {
+            #[wasm_bindgen(js_name = "createEncryptionKey")]
+            pub fn create_encryption_key(&self) -> Result<Vec<u8>, JsValue> {
                 let key_vec = crypto::generate_key().map_err(JsValue::from)?;
                 let mut bytes = [0u8; 32];
                 bytes.copy_from_slice(&key_vec);
                 self.state.lock().encryption_key = Some(EncryptionKey::new(bytes));
                 Ok(key_vec)
+            }
+
+            #[wasm_bindgen(js_name = "generateKey")]
+            pub fn generate_key(&self) -> Result<Vec<u8>, JsValue> {
+                self.create_encryption_key()
             }
 
             pub fn set(
@@ -450,13 +455,18 @@ impl IndexedDb {
         Ok(())
     }
 
-    #[wasm_bindgen(js_name = "generateKey")]
-    pub fn generate_key(&self) -> Result<Vec<u8>, JsValue> {
+    #[wasm_bindgen(js_name = "createEncryptionKey")]
+    pub fn create_encryption_key(&self) -> Result<Vec<u8>, JsValue> {
         let key_vec = crypto::generate_key().map_err(JsValue::from)?;
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(&key_vec);
         self.state.lock().encryption_key = Some(EncryptionKey::new(bytes));
         Ok(key_vec)
+    }
+
+    #[wasm_bindgen(js_name = "generateKey")]
+    pub fn generate_key(&self) -> Result<Vec<u8>, JsValue> {
+        self.create_encryption_key()
     }
 
     pub async fn set(&self, key: &str, value: JsValue, ttl_ms: Option<f64>) -> Result<(), JsValue> {
