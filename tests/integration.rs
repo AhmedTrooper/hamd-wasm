@@ -185,6 +185,32 @@ fn memory_encryption_roundtrip() {
 }
 
 #[wasm_bindgen_test]
+fn local_encrypted_value_requires_key_browser_only() {
+    let encrypted = Local::new(Some("enc-required:".into()));
+    if encrypted
+        .set("probe", JsValue::from_str("ok"), None)
+        .is_err()
+    {
+        return;
+    }
+    encrypted.remove("probe").unwrap();
+    encrypted.generate_key().unwrap();
+    encrypted
+        .set("secret", JsValue::from_str("value"), None)
+        .unwrap();
+
+    let unconfigured = Local::new(Some("enc-required:".into()));
+    let error = unconfigured.get("secret").unwrap_err();
+    assert!(
+        error
+            .as_string()
+            .unwrap()
+            .contains("encryption key required")
+    );
+    encrypted.remove("secret").unwrap();
+}
+
+#[wasm_bindgen_test]
 fn memory_enable_encryption_validates_key_length() {
     let store = Memory::new(None);
     let err = store.enable_encryption(&[1, 2, 3]).unwrap_err();

@@ -147,7 +147,14 @@ macro_rules! impl_storage {
                     Some(raw) => {
                         let json = match &guard.encryption_key {
                             Some(ek) => crypto::decrypt(ek.bytes(), &raw).map_err(JsValue::from)?,
-                            None => raw,
+                            None => {
+                                if crypto::looks_encrypted(&raw) {
+                                    return Err(JsValue::from_str(
+                                        "encryption key required to read encrypted data",
+                                    ));
+                                }
+                                raw
+                            }
                         };
                         let parsed = js_sys::JSON::parse(&json)?;
                         match envelope::unwrap(parsed)? {
@@ -430,7 +437,14 @@ impl IndexedDb {
     fn decrypt_value(&self, stored: &str) -> Result<String, JsValue> {
         match &self.state.lock().encryption_key {
             Some(ek) => crypto::decrypt(ek.bytes(), stored).map_err(JsValue::from),
-            None => Ok(stored.to_string()),
+            None => {
+                if crypto::looks_encrypted(stored) {
+                    return Err(JsValue::from_str(
+                        "encryption key required to read encrypted data",
+                    ));
+                }
+                Ok(stored.to_string())
+            }
         }
     }
 }

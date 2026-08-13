@@ -59,3 +59,9 @@ pub(crate) fn decrypt(key: &[u8; 32], hex_data: &str) -> Result<String, String> 
 
     String::from_utf8(plaintext).map_err(|e| format!("utf-8 decode: {e}"))
 }
+
+pub(crate) fn looks_encrypted(value: &str) -> bool {
+    value.len() >= 56
+        && value.len().is_multiple_of(2)
+        && value.as_bytes().iter().all(u8::is_ascii_hexdigit)
+}
