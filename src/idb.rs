@@ -5,6 +5,8 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
+use crate::ops::StorageError;
+
 const DB_NAME: &str = "hamd";
 const DB_VERSION: u32 = 1;
 const STORE_NAME: &str = "kv";
@@ -63,52 +65,55 @@ pub(crate) async fn raw_set(
     db: &web_sys::IdbDatabase,
     key: &str,
     value: &str,
-) -> Result<(), String> {
+) -> Result<(), StorageError> {
     let store = store_with_mode(db, web_sys::IdbTransactionMode::Readwrite)?;
     let req = store
         .put_with_key(&JsValue::from_str(value), &JsValue::from_str(key))
-        .map_err(js_err)?;
+        .map_err(idb_err)?;
     JsFuture::from(request_promise(&req))
         .await
-        .map_err(js_err)?;
+        .map_err(idb_err)?;
     Ok(())
 }
 
 pub(crate) async fn raw_get(
     db: &web_sys::IdbDatabase,
     key: &str,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, StorageError> {
     let store = store_with_mode(db, web_sys::IdbTransactionMode::Readonly)?;
-    let req = store.get(&JsValue::from_str(key)).map_err(js_err)?;
+    let req = store.get(&JsValue::from_str(key)).map_err(idb_err)?;
     let result = JsFuture::from(request_promise(&req))
         .await
-        .map_err(js_err)?;
+        .map_err(idb_err)?;
     Ok(result.as_string())
 }
 
-pub(crate) async fn raw_remove(db: &web_sys::IdbDatabase, keys: &[String]) -> Result<(), String> {
+pub(crate) async fn raw_remove(
+    db: &web_sys::IdbDatabase,
+    keys: &[String],
+) -> Result<(), StorageError> {
     if keys.is_empty() {
         return Ok(());
     }
     let store = store_with_mode(db, web_sys::IdbTransactionMode::Readwrite)?;
     let mut last = None;
     for key in keys {
-        last = Some(store.delete(&JsValue::from_str(key)).map_err(js_err)?);
+        last = Some(store.delete(&JsValue::from_str(key)).map_err(idb_err)?);
     }
     if let Some(req) = last {
         JsFuture::from(request_promise(&req))
             .await
-            .map_err(js_err)?;
+            .map_err(idb_err)?;
     }
     Ok(())
 }
 
-pub(crate) async fn raw_keys(db: &web_sys::IdbDatabase) -> Result<Vec<String>, String> {
+pub(crate) async fn raw_keys(db: &web_sys::IdbDatabase) -> Result<Vec<String>, StorageError> {
     let store = store_with_mode(db, web_sys::IdbTransactionMode::Readonly)?;
-    let req = store.get_all_keys().map_err(js_err)?;
+    let req = store.get_all_keys().map_err(idb_err)?;
     let result = JsFuture::from(request_promise(&req))
         .await
-        .map_err(js_err)?;
+        .map_err(idb_err)?;
     let array: js_sys::Array = result.unchecked_into();
     let mut keys = Vec::with_capacity(array.length() as usize);
     for i in 0..array.length() {
@@ -122,11 +127,11 @@ pub(crate) async fn raw_keys(db: &web_sys::IdbDatabase) -> Result<Vec<String>, S
 fn store_with_mode(
     db: &web_sys::IdbDatabase,
     mode: web_sys::IdbTransactionMode,
-) -> Result<web_sys::IdbObjectStore, String> {
+) -> Result<web_sys::IdbObjectStore, StorageError> {
     let tx = db
         .transaction_with_str_and_mode(STORE_NAME, mode)
-        .map_err(js_err)?;
-    tx.object_store(STORE_NAME).map_err(js_err)
+        .map_err(idb_err)?;
+    tx.object_store(STORE_NAME).map_err(idb_err)
 }
 
 fn request_promise(req: &web_sys::IdbRequest) -> js_sys::Promise {
@@ -165,6 +170,15 @@ fn request_promise(req: &web_sys::IdbRequest) -> js_sys::Promise {
         req.set_onerror(Some(onerror.as_ref().unchecked_ref()));
         *slot.borrow_mut() = Some((onsuccess, onerror));
     })
+}
+
+fn idb_err(e: JsValue) -> StorageError {
+    if e.dyn_ref::<web_sys::DomException>()
+        .is_some_and(|dom| dom.name() == "QuotaExceededError" || dom.code() == 22)
+    {
+        return StorageError::QuotaExceeded;
+    }
+    StorageError::Other(js_err(e))
 }
 
 fn js_err(e: JsValue) -> String {

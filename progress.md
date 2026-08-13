@@ -25,13 +25,14 @@ All state wrapped in `Arc<Mutex<…>>` (parking_lot) for thread safety across We
 - [x] `sync.rs` — cross-tab sync: per-kind BroadcastChannel, `subscribe(cb)` returns an
       unsubscribe fn; set/remove/clear broadcast `{action,prefix,key}` filtered by prefix
 - [x] Bulk ops: `mset(entriesObj, ttlMs?)` and `mget(keysArray) -> object` on all types
+- [x] Quota recovery: `StorageError::QuotaExceeded` detected (web + IndexedDB backends);
+      `set` evicts expired entries via `purgeExpired` and retries once before failing
 - [x] All checks pass: `cargo check`, `cargo fmt`, `cargo clippy` (zero warnings, `-D warnings`)
 - [x] CI workflow: fmt, clippy, check, wasm-pack build on push/PR to main/dev
 - [x] Release workflow: validate → publish crates.io + npm → GitHub Release on `v*` tags
 
 ## TODO
 
-- [ ] Quota exceeded error recovery with auto-evict of expired entries
 - [ ] wasm-pack build + npm packaging
 - [ ] Integration tests (wasm-bindgen-test)
 - [ ] README with usage examples

@@ -14,7 +14,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
 use crate::crypto::EncryptionKey;
-use crate::ops::StorageOps;
+use crate::ops::{StorageError, StorageOps};
 
 macro_rules! impl_storage {
     ($Name:ident, $InnerName:ident, $Backend:ty, $backend_init:expr, $sync_kind:expr) => {
@@ -74,24 +74,39 @@ macro_rules! impl_storage {
                 value: JsValue,
                 ttl_ms: Option<f64>,
             ) -> Result<(), JsValue> {
+                let (full_key, stored) = {
+                    let mut guard = self.state.lock();
+                    let full_key = format!("{}{}", guard.prefix, key);
+                    let json: String = js_sys::JSON::stringify(&value)?.into();
+                    let payload = match ttl_ms {
+                        Some(ms) => envelope::wrap(&json, ms),
+                        None => json,
+                    };
+
+                    let stored = match &guard.encryption_key {
+                        Some(ek) => crypto::encrypt(ek.bytes(), payload.as_bytes())
+                            .map_err(StorageError::Other)?,
+                        None => payload,
+                    };
+
+                    match guard.backend.raw_set(&full_key, &stored) {
+                        Ok(()) => {
+                            let prefix = guard.prefix.clone();
+                            guard.sync.notify("set", &prefix, key);
+                            return Ok(());
+                        }
+                        // Quota hit: fall through, evict expired entries, retry once.
+                        Err(StorageError::QuotaExceeded) => (full_key, stored),
+                        Err(e) => return Err(e.into()),
+                    }
+                };
+
+                self.purge_expired()?;
                 let mut guard = self.state.lock();
-                let full_key = format!("{}{}", guard.prefix, key);
-                let json: String = js_sys::JSON::stringify(&value)?.into();
-                let payload = match ttl_ms {
-                    Some(ms) => envelope::wrap(&json, ms),
-                    None => json,
-                };
-
-                let stored = match &guard.encryption_key {
-                    Some(ek) => crypto::encrypt(ek.bytes(), payload.as_bytes())
-                        .map_err(|e| JsValue::from_str(&e))?,
-                    None => payload,
-                };
-
                 guard
                     .backend
                     .raw_set(&full_key, &stored)
-                    .map_err(|e| JsValue::from_str(&e))?;
+                    .map_err(JsValue::from)?;
                 let prefix = guard.prefix.clone();
                 guard.sync.notify("set", &prefix, key);
                 Ok(())
@@ -101,25 +116,17 @@ macro_rules! impl_storage {
                 let mut guard = self.state.lock();
                 let full_key = format!("{}{}", guard.prefix, key);
 
-                match guard
-                    .backend
-                    .raw_get(&full_key)
-                    .map_err(|e| JsValue::from_str(&e))?
-                {
+                match guard.backend.raw_get(&full_key).map_err(JsValue::from)? {
                     Some(raw) => {
                         let json = match &guard.encryption_key {
-                            Some(ek) => crypto::decrypt(ek.bytes(), &raw)
-                                .map_err(|e| JsValue::from_str(&e))?,
+                            Some(ek) => crypto::decrypt(ek.bytes(), &raw).map_err(JsValue::from)?,
                             None => raw,
                         };
                         let parsed = js_sys::JSON::parse(&json)?;
                         match envelope::unwrap(parsed)? {
                             envelope::Unwrapped::Value(value) => Ok(value),
                             envelope::Unwrapped::Expired => {
-                                guard
-                                    .backend
-                                    .raw_remove(&full_key)
-                                    .map_err(|e| JsValue::from_str(&e))?;
+                                guard.backend.raw_remove(&full_key).map_err(JsValue::from)?;
                                 Ok(JsValue::NULL)
                             }
                         }
@@ -131,10 +138,7 @@ macro_rules! impl_storage {
             pub fn remove(&self, key: &str) -> Result<(), JsValue> {
                 let mut guard = self.state.lock();
                 let full_key = format!("{}{}", guard.prefix, key);
-                guard
-                    .backend
-                    .raw_remove(&full_key)
-                    .map_err(|e| JsValue::from_str(&e))?;
+                guard.backend.raw_remove(&full_key).map_err(JsValue::from)?;
                 let prefix = guard.prefix.clone();
                 guard.sync.notify("remove", &prefix, key);
                 Ok(())
@@ -146,16 +150,13 @@ macro_rules! impl_storage {
                 let keys: Vec<String> = guard
                     .backend
                     .raw_keys()
-                    .map_err(|e| JsValue::from_str(&e))?
+                    .map_err(JsValue::from)?
                     .into_iter()
                     .filter(|k| k.starts_with(&prefix))
                     .collect();
 
                 for k in &keys {
-                    guard
-                        .backend
-                        .raw_remove(k)
-                        .map_err(|e| JsValue::from_str(&e))?;
+                    guard.backend.raw_remove(k).map_err(JsValue::from)?;
                 }
                 guard.sync.notify("clear", &prefix, "");
                 Ok(())
@@ -170,11 +171,7 @@ macro_rules! impl_storage {
                 let prefix = &guard.prefix;
                 let arr = js_sys::Array::new();
 
-                for k in guard
-                    .backend
-                    .raw_keys()
-                    .map_err(|e| JsValue::from_str(&e))?
-                {
+                for k in guard.backend.raw_keys().map_err(JsValue::from)? {
                     if let Some(stripped) = k.strip_prefix(prefix) {
                         arr.push(&JsValue::from_str(stripped));
                     }
@@ -188,7 +185,7 @@ macro_rules! impl_storage {
                 let count = guard
                     .backend
                     .raw_keys()
-                    .map_err(|e| JsValue::from_str(&e))?
+                    .map_err(JsValue::from)?
                     .iter()
                     .filter(|k| k.starts_with(prefix))
                     .count();
@@ -203,7 +200,7 @@ macro_rules! impl_storage {
                     guard
                         .backend
                         .raw_keys()
-                        .map_err(|e| JsValue::from_str(&e))?
+                        .map_err(JsValue::from)?
                         .into_iter()
                         .filter_map(|k| k.strip_prefix(&prefix).map(String::from))
                         .collect()
@@ -304,23 +301,21 @@ impl IndexedDb {
         if let Some(db) = self.state.lock().backend.cached_db() {
             return Ok(db);
         }
-        let db = idb::open_db().await.map_err(|e| JsValue::from_str(&e))?;
+        let db = idb::open_db().await.map_err(JsValue::from)?;
         self.state.lock().backend.set_cached_db(db.clone());
         Ok(db)
     }
 
     fn encrypt_value(&self, json: &str) -> Result<String, JsValue> {
         match &self.state.lock().encryption_key {
-            Some(ek) => {
-                crypto::encrypt(ek.bytes(), json.as_bytes()).map_err(|e| JsValue::from_str(&e))
-            }
+            Some(ek) => crypto::encrypt(ek.bytes(), json.as_bytes()).map_err(JsValue::from),
             None => Ok(json.to_string()),
         }
     }
 
     fn decrypt_value(&self, stored: &str) -> Result<String, JsValue> {
         match &self.state.lock().encryption_key {
-            Some(ek) => crypto::decrypt(ek.bytes(), stored).map_err(|e| JsValue::from_str(&e)),
+            Some(ek) => crypto::decrypt(ek.bytes(), stored).map_err(JsValue::from),
             None => Ok(stored.to_string()),
         }
     }
@@ -372,9 +367,18 @@ impl IndexedDb {
         };
         let stored = self.encrypt_value(&payload)?;
         let db = self.db().await?;
-        idb::raw_set(&db, &full_key, &stored)
-            .await
-            .map_err(|e| JsValue::from_str(&e))?;
+        let needs_retry = match idb::raw_set(&db, &full_key, &stored).await {
+            Ok(()) => false,
+            // Quota hit: evict expired entries, retry once.
+            Err(StorageError::QuotaExceeded) => true,
+            Err(e) => return Err(e.into()),
+        };
+        if needs_retry {
+            self.purge_expired().await?;
+            idb::raw_set(&db, &full_key, &stored)
+                .await
+                .map_err(JsValue::from)?;
+        }
         let guard = self.state.lock();
         let prefix = guard.prefix.clone();
         guard.sync.notify("set", &prefix, key);
@@ -384,10 +388,7 @@ impl IndexedDb {
     pub async fn get(&self, key: &str) -> Result<JsValue, JsValue> {
         let full_key = format!("{}{}", self.state.lock().prefix, key);
         let db = self.db().await?;
-        let Some(stored) = idb::raw_get(&db, &full_key)
-            .await
-            .map_err(|e| JsValue::from_str(&e))?
-        else {
+        let Some(stored) = idb::raw_get(&db, &full_key).await.map_err(JsValue::from)? else {
             return Ok(JsValue::NULL);
         };
         let json = self.decrypt_value(&stored)?;
@@ -397,7 +398,7 @@ impl IndexedDb {
             envelope::Unwrapped::Expired => {
                 idb::raw_remove(&db, &[full_key])
                     .await
-                    .map_err(|e| JsValue::from_str(&e))?;
+                    .map_err(JsValue::from)?;
                 Ok(JsValue::NULL)
             }
         }
@@ -408,7 +409,7 @@ impl IndexedDb {
         let db = self.db().await?;
         idb::raw_remove(&db, &[full_key])
             .await
-            .map_err(|e| JsValue::from_str(&e))?;
+            .map_err(JsValue::from)?;
         let guard = self.state.lock();
         let prefix = guard.prefix.clone();
         guard.sync.notify("remove", &prefix, key);
@@ -418,16 +419,12 @@ impl IndexedDb {
     pub async fn clear(&self) -> Result<(), JsValue> {
         let prefix = self.state.lock().prefix.clone();
         let db = self.db().await?;
-        let keys = idb::raw_keys(&db)
-            .await
-            .map_err(|e| JsValue::from_str(&e))?;
+        let keys = idb::raw_keys(&db).await.map_err(JsValue::from)?;
         let doomed: Vec<String> = keys
             .into_iter()
             .filter(|k| k.starts_with(&prefix))
             .collect();
-        idb::raw_remove(&db, &doomed)
-            .await
-            .map_err(|e| JsValue::from_str(&e))?;
+        idb::raw_remove(&db, &doomed).await.map_err(JsValue::from)?;
         self.state.lock().sync.notify("clear", &prefix, "");
         Ok(())
     }
@@ -440,10 +437,7 @@ impl IndexedDb {
         let prefix = self.state.lock().prefix.clone();
         let db = self.db().await?;
         let arr = js_sys::Array::new();
-        for k in idb::raw_keys(&db)
-            .await
-            .map_err(|e| JsValue::from_str(&e))?
-        {
+        for k in idb::raw_keys(&db).await.map_err(JsValue::from)? {
             if let Some(stripped) = k.strip_prefix(&prefix) {
                 arr.push(&JsValue::from_str(stripped));
             }
@@ -456,7 +450,7 @@ impl IndexedDb {
         let db = self.db().await?;
         let count = idb::raw_keys(&db)
             .await
-            .map_err(|e| JsValue::from_str(&e))?
+            .map_err(JsValue::from)?
             .into_iter()
             .filter(|k| k.starts_with(&prefix))
             .count();
@@ -467,9 +461,7 @@ impl IndexedDb {
     pub async fn purge_expired(&self) -> Result<(), JsValue> {
         let prefix = self.state.lock().prefix.clone();
         let db = self.db().await?;
-        let raw = idb::raw_keys(&db)
-            .await
-            .map_err(|e| JsValue::from_str(&e))?;
+        let raw = idb::raw_keys(&db).await.map_err(JsValue::from)?;
         let user_keys: Vec<String> = raw
             .into_iter()
             .filter_map(|k| k.strip_prefix(&prefix).map(String::from))
