@@ -96,11 +96,8 @@ pub(crate) async fn raw_remove(
         return Ok(());
     }
     let store = store_with_mode(db, web_sys::IdbTransactionMode::Readwrite)?;
-    let mut last = None;
     for key in keys {
-        last = Some(store.delete(&JsValue::from_str(key)).map_err(idb_err)?);
-    }
-    if let Some(req) = last {
+        let req = store.delete(&JsValue::from_str(key)).map_err(idb_err)?;
         JsFuture::from(request_promise(&req))
             .await
             .map_err(idb_err)?;
