@@ -1,4 +1,7 @@
-use hamd_wasm::{IndexedDb, Local, Memory};
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use hamd_wasm::{Cookies, IndexedDb, Local, Memory, Session};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_test::*;
 
@@ -190,4 +193,143 @@ async fn indexeddb_roundtrip_browser_only() {
     let got = db.get("probe").await.unwrap();
     assert_eq!(got.as_string().unwrap(), "ok");
     db.remove("probe").await.unwrap();
+}
+
+async fn sleep_ms(ms: i32) {
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        web_sys::window()
+            .unwrap()
+            .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms)
+            .unwrap();
+    });
+    wasm_bindgen_futures::JsFuture::from(promise).await.unwrap();
+}
+
+#[wasm_bindgen_test]
+async fn memory_ttl_expiry_via_sleep() {
+    let store = Memory::new(None);
+    store
+        .set("short", JsValue::from_str("tmp"), Some(40.0))
+        .unwrap();
+    assert!(store.has("short").unwrap());
+    sleep_ms(100).await;
+    assert!(store.get("short").unwrap().is_null());
+    assert!(!store.has("short").unwrap());
+}
+
+#[wasm_bindgen_test]
+async fn memory_mset_with_ttl_expiry() {
+    let store = Memory::new(None);
+    let obj = js_sys::Object::new();
+    js_sys::Reflect::set(&obj, &JsValue::from_str("x"), &JsValue::from_str("1")).unwrap();
+    js_sys::Reflect::set(&obj, &JsValue::from_str("y"), &JsValue::from_str("2")).unwrap();
+    store.mset(obj, Some(40.0)).unwrap();
+    assert!(store.has("x").unwrap());
+    sleep_ms(100).await;
+    assert!(store.get("x").unwrap().is_null());
+    assert!(store.get("y").unwrap().is_null());
+    store.purge_expired().unwrap();
+    assert_eq!(store.length().unwrap(), 0);
+}
+
+#[wasm_bindgen_test]
+fn session_roundtrip_browser_only() {
+    let Ok(store) = std::panic::catch_unwind(|| Session::new(None)) else {
+        return;
+    };
+    if store.set("probe", JsValue::from_str("ok"), None).is_err() {
+        return;
+    }
+    let got = store.get("probe").unwrap();
+    assert_eq!(got.as_string().unwrap(), "ok");
+    assert!(store.has("probe").unwrap());
+    assert_eq!(store.length().unwrap(), 1);
+    store.remove("probe").unwrap();
+    assert!(store.get("probe").unwrap().is_null());
+}
+
+#[wasm_bindgen_test]
+fn cookies_roundtrip_browser_only() {
+    let Ok(store) = std::panic::catch_unwind(|| Cookies::new(None)) else {
+        return;
+    };
+    // Cookies may be denied in headless file:// context — treat Err as skip.
+    if store
+        .set("probe", JsValue::from_str("a;b=c d/e"), None)
+        .is_err()
+    {
+        return;
+    }
+    let got = store.get("probe").unwrap();
+    assert_eq!(got.as_string().unwrap(), "a;b=c d/e");
+    assert!(store.has("probe").unwrap());
+    store.remove("probe").unwrap();
+    assert!(store.get("probe").unwrap().is_null());
+}
+
+#[wasm_bindgen_test]
+async fn memory_sync_notifies_subscriber() {
+    let a = Memory::new(Some("sync-test:".into()));
+    let b = Memory::new(Some("sync-test:".into()));
+    let flag = Rc::new(RefCell::new(false));
+    let flag_clone = flag.clone();
+    let closure =
+        wasm_bindgen::closure::Closure::wrap(Box::new(move |action: JsValue, key: JsValue| {
+            if action.as_string().as_deref() == Some("set")
+                && key.as_string().as_deref() == Some("ping")
+            {
+                *flag_clone.borrow_mut() = true;
+            }
+        }) as Box<dyn FnMut(JsValue, JsValue)>);
+    let func: js_sys::Function = closure.as_ref().unchecked_ref::<js_sys::Function>().clone();
+    let _unsub = a.subscribe(func).unwrap();
+    b.set("ping", JsValue::from_str("1"), None).unwrap();
+    sleep_ms(80).await;
+    assert!(*flag.borrow());
+    // keep closure alive until assert
+    drop(closure);
+}
+
+#[wasm_bindgen_test]
+fn sync_unsubscribe_returns_callable() {
+    let store = Memory::new(Some("sync-unsub:".into()));
+    let closure = wasm_bindgen::closure::Closure::wrap(
+        Box::new(move |_: JsValue, _: JsValue| {}) as Box<dyn FnMut(JsValue, JsValue)>
+    );
+    let func: js_sys::Function = closure.as_ref().unchecked_ref::<js_sys::Function>().clone();
+    let unsub = store.subscribe(func).unwrap();
+    assert!(unsub.is_function());
+    let unsub_fn: js_sys::Function = unsub.unchecked_into();
+    unsub_fn.call0(&JsValue::UNDEFINED).unwrap();
+    drop(closure);
+}
+
+#[wasm_bindgen_test]
+fn local_encryption_wrong_key_fails_browser_only() {
+    let prefix = "enc-wrong:".to_string();
+    let Ok(store1) = std::panic::catch_unwind(|| Local::new(Some(prefix.clone()))) else {
+        return;
+    };
+    // Ensure storage available
+    if store1.set("probe", JsValue::from_str("ok"), None).is_err() {
+        return;
+    }
+    store1.remove("probe").unwrap();
+    let _key1 = store1.generate_key().unwrap();
+    store1
+        .set("secret2", JsValue::from_str("s3cr3t"), None)
+        .unwrap();
+    let store2 = Local::new(Some(prefix.clone()));
+    let _wrong = store2.generate_key().unwrap();
+    let result = store2.get("secret2");
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .as_string()
+            .unwrap()
+            .contains("decryption failed")
+    );
+    // cleanup with correct key
+    store1.remove("secret2").unwrap();
 }
