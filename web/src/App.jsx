@@ -1,4 +1,4 @@
-import { createSignal, onMount, onCleanup, For, Show, createMemo } from "solid-js";
+import { createSignal, createEffect, onMount, onCleanup, For, Show, createMemo } from "solid-js";
 import "./App.css";
 
 /* All API examples on this page are written against the actual exported surface
@@ -301,6 +301,22 @@ function ArrowRight() {
   );
 }
 
+function MenuIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 6h18M3 12h18M3 18h18" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 6L6 18M6 6l12 12" />
+    </svg>
+  );
+}
+
 /* =========================================================
    App
    ========================================================= */
@@ -308,6 +324,7 @@ function ArrowRight() {
 export default function App() {
   const [route, setRoute] = createSignal("intro");
   const [theme, setTheme] = createSignal("dark");
+  const [navOpen, setNavOpen] = createSignal(false);
 
   const samples = [
     {
@@ -390,6 +407,26 @@ console.log(cache.mget(["a", "b", "missing"]));
      plain object so both closures see the same value across renders. */
   const scrollState = { suppress: false };
 
+  /* Body scroll lock + Escape-to-close for the off-canvas drawer.
+     createEffect tracks `navOpen` so the flag is always in sync. */
+  createEffect(() => {
+    const isOpen = navOpen();
+    if (typeof document === "undefined") return;
+    document.body.classList.toggle("nav-locked", isOpen);
+  });
+  const onKeydown = (e) => {
+    if (e.key === "Escape" && navOpen()) setNavOpen(false);
+  };
+  onMount(() => {
+    window.addEventListener("keydown", onKeydown);
+  });
+  onCleanup(() => {
+    if (typeof document !== "undefined") {
+      document.body.classList.remove("nav-locked");
+    }
+    window.removeEventListener("keydown", onKeydown);
+  });
+
   const applyTheme = (t) => document.documentElement.setAttribute("data-theme", t);
 
   const toggleTheme = () => {
@@ -403,6 +440,7 @@ console.log(cache.mget(["a", "b", "missing"]));
 
   const go = (id) => {
     setRoute(id);
+    setNavOpen(false);
     // Briefly suppress scroll-tracker so smooth-scroll doesn't flicker the
     // active id through intermediate sections.
     scrollState.suppress = true;
@@ -497,8 +535,18 @@ console.log(cache.mget(["a", "b", "missing"]));
   });
 
   return (
-    <div class="layout">
+    <div class={`layout ${navOpen() ? "nav-open" : ""}`}>
       <header class="topbar">
+        <button
+          class="nav-toggle"
+          onClick={() => setNavOpen(!navOpen())}
+          aria-label="Toggle navigation"
+          aria-expanded={navOpen()}
+        >
+          <Show when={!navOpen()} fallback={<CloseIcon />}>
+            <MenuIcon />
+          </Show>
+        </button>
         <a class="brand" href="#intro" onClick={(e) => { e.preventDefault(); go("intro"); }}>
           <div class="brand-mark">
             <StackIcon />
@@ -535,6 +583,8 @@ console.log(cache.mget(["a", "b", "missing"]));
           </button>
         </nav>
       </header>
+
+      <div class="sidebar-backdrop" onClick={() => setNavOpen(false)} />
 
       <aside class="sidebar">
         <For each={NAV}>
