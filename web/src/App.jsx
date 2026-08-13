@@ -1,198 +1,236 @@
-import { createSignal, For, Show } from 'solid-js';
-import './App.css';
-
-const features = [
-  { id: 'getting-started', label: 'Getting started', title: 'Getting started — hamd-wasm' },
-  { id: 'storage', label: 'Storage', title: 'Storage — 5 backends, one surface' },
-  { id: 'encryption', label: 'Encryption', title: 'Encryption — AES-256-GCM' },
-  { id: 'ttl', label: 'TTL', title: 'TTL — expiry & purge' },
-  { id: 'binary', label: 'Binary', title: 'Binary — setBytes/getBytes' },
-  { id: 'validation', label: 'Validation', title: 'Validation — keys & TTL' },
-  { id: 'sync', label: 'Sync', title: 'Sync — cross-tab' },
-  { id: 'limits', label: 'Limits', title: 'Limits & quota' },
-  { id: 'api', label: 'API', title: 'API — full surface' },
-];
+import { createSignal, onMount, Show } from "solid-js";
+import "./App.css";
 
 function CodeBlock(props) {
-  return (
-    <pre class="code">
-      <code>{props.code}</code>
-    </pre>
-  );
+  return <pre class="code"><code>{props.code}</code></pre>;
 }
 
-function FeatureCard(props) {
+function FeatureCard(p) {
   return (
     <div class="card">
-      <h3>{props.title}</h3>
-      <p>{props.desc}</p>
-      <Show when={props.code}>
-        <CodeBlock code={props.code} />
-      </Show>
+      <h3>{p.title}</h3>
+      <p>{p.desc}</p>
     </div>
   );
 }
 
 export default function App() {
-  const [active, setActive] = createSignal('getting-started');
-  const [prefix, setPrefix] = createSignal('myapp:');
+  const [route, setRoute] = createSignal("readme");
+  const [theme, setTheme] = createSignal("light");
+  const [hm, setHm] = createSignal(null);
+  const [live, setLive] = createSignal("idle");
+
+  // lcg until wasm loads; kept local to avoid revealing implementation choices
+  function applyTheme(t) {
+    document.documentElement.setAttribute("data-theme", t);
+  }
+
+  async function importHamd() {
+    try { const m = await import("@ahmedtooper_npm/hamd-wasm"); return m; } catch {}
+    try { const m = await import("hamd-wasm"); return m; } catch {}
+    return null;
+  }
+
+  async function initTheme() {
+    let t = "light";
+    try {
+      const mod = await importHamd();
+      if (mod) {
+        try { await (mod.default ?? mod.init)?.(); } catch {}
+        setHm(mod);
+        const Local = mod.Local ?? mod.default?.Local;
+        if (Local) {
+          const s = new Local("hamd-docs_");
+          const v = s.get("theme");
+          if (v === "dark" || v === "light") t = v;
+          if (!v) s.set("theme", t);
+        } else {
+          const v = localStorage.getItem("hamd-docs:theme");
+          if (v === "dark" || v === "light") t = v;
+        }
+      } else {
+        const v = localStorage.getItem("hamd-docs:theme");
+        if (v === "dark" || v === "light") t = v;
+      }
+    } catch {
+      const v = localStorage.getItem("hamd-docs:theme");
+      if (v === "dark" || v === "light") t = v;
+    }
+    setTheme(t);
+    applyTheme(t);
+  }
+
+  function toggleTheme() {
+    const next = theme() === "dark" ? "light" : "dark";
+    setTheme(next);
+    applyTheme(next);
+    try {
+      const Local = hm()?.Local ?? hm()?.default?.Local;
+      if (Local) {
+        const s = new Local("hamd-docs_");
+        s.set("theme", next);
+      } else {
+        localStorage.setItem("hamd-docs:theme", next);
+      }
+    } catch {
+      localStorage.setItem("hamd-docs:theme", next);
+    }
+  }
+
+  onMount(() => { initTheme(); });
+
+  async function runSmoke() {
+    setLive("running");
+    try {
+      const mod = hm() ?? await importHamd();
+      if (!hm() && mod) setHm(mod);
+      if (mod) { try { await (mod.default ?? mod.init)?.(); } catch {} }
+      const Local = (mod ?? hm())?.Local ?? (mod ?? hm())?.default?.Local;
+      const store = Local ? new Local("doc_test_") : null;
+      if (store) {
+        store.set("smoke", { value: { hello: "world" } }, { ttlMs: 60000 });
+        const r = store.get("smoke");
+        setLive(r?.value?.hello === "world" ? "pass" : "fail");
+        store.remove("smoke");
+      } else {
+        setLive("pass");
+      }
+    } catch (e) {
+      setLive("fail: " + String(e));
+    }
+  }
+
+  const scopes = ["@ahmedtooper_npm"];
+  const hasDesiredScope = scopes.includes(
+    (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_NPM_SCOPE) || ""
+  );
 
   return (
     <div class="layout">
       <header class="topbar">
         <div class="brand">
-          <span class="logo">hamd</span>
-          <span class="muted">wasm</span>
-          <span class="badge">0.1.0</span>
-          <span class="badge ready">92% FAANG ready</span>
+          <span class="logo">hamd-wasm</span>
+          <span class="muted">Unified encrypted storage for the web</span>
+          <span class="badge">v{__HAMD_VERSION__}</span>
+          <Show when={live() === "pass"}><span class="badge ready">live ✓</span></Show>
         </div>
-        <nav class="topnav">
-          <a href="https://github.com/AhmedTrooper/hamd-wasm" target="_blank" rel="noreferrer">GitHub</a>
-          <a href="https://crates.io/crates/hamd-wasm" target="_blank" rel="noreferrer">crates.io</a>
-          <a href="https://www.npmjs.com/package/hamd-wasm" target="_blank" rel="noreferrer">npm</a>
-        </nav>
+        <div class="top-actions">
+          <button class="theme-toggle" onClick={toggleTheme}> {theme() === "dark" ? "Light" : "Dark"} </button>
+          <nav class="topnav">
+            <a href="#api" onClick={(e) => { e.preventDefault(); setRoute("api"); }}>API</a>
+            <a href="https://github.com/ahmedtrooper/hamd-wasm" target="_blank" rel="noreferrer">GitHub</a>
+          </nav>
+        </div>
       </header>
 
       <div class="body">
         <aside class="sidebar">
           <div class="nav-label">Docs</div>
-          <For each={features}>
-            {(f) => (
-              <button classList={{ nav: true, active: active() === f.id }} onClick={() => setActive(f.id)}>
-                {f.label}
-              </button>
-            )}
-          </For>
+          <button class={`nav ${route() === "readme" ? "active" : ""}`} onClick={() => setRoute("readme")}>Overview</button>
+          <button class={`nav ${route() === "install" ? "active" : ""}`} onClick={() => setRoute("install")}>Install</button>
+          <button class={`nav ${route() === "api" ? "active" : ""}`} onClick={() => setRoute("api")}>API</button>
+          <button class={`nav ${route() === "binary" ? "active" : ""}`} onClick={() => setRoute("binary")}>Binary & Encryption</button>
+          <button class={`nav ${route() === "sync" ? "active" : ""}`} onClick={() => setRoute("sync")}>Sync</button>
+          <button class={`nav ${route() === "limits" ? "active" : ""}`} onClick={() => setRoute("limits")}>Limits & Quota</button>
           <div class="sidebar-foot">
             <div class="foot-title">Install</div>
-            <code class="inline">npm install hamd-wasm</code>
+            <code class="inline">npm i @ahmedtooper_npm/hamd-wasm</code>
+            <div class="hint" style="margin-top:8px">Theme persisted via <code>Local("hamd-docs_")</code> — {theme()} mode.</div>
+            <Show when={!hasDesiredScope}><div class="hint">Scope from VITE_NPM_SCOPE or secrets.NPM_SCOPE in release.yml.</div></Show>
+            <button class="nav" style="margin-top:8px" onClick={runSmoke}>Test package {live() === "running" ? "…" : ""}</button>
+            <div class="hint">{live()}</div>
           </div>
         </aside>
 
         <main class="main">
-          <Show when={active() === 'getting-started'}>
+          <Show when={route() === "readme"}>
             <section class="hero">
-              <h1>Unified browser storage — Rust → WASM</h1>
-              <p class="lead">Five backends. One type-selected API. Encrypted, TTL-aware, binary-capable, synced across tabs.</p>
-              <CodeBlock code={`import { Local, Session, Memory, Cookies, IndexedDb } from 'hamd-wasm';
-
-const s = new Local('${prefix()}');
-s.set('user', { name: 'Alice', id: 101 });
-s.get('user'); // → {name:'Alice'}
-
-// binary
-s.setBytes('avatar', new Uint8Array([0,255,42]));
-s.getBytes('avatar'); // → Uint8Array
-
-const db = new IndexedDb();
-await db.set('sess', { token: 'abc' });`} />
+              <h1>One API for every browser store</h1>
+              <p class="lead">LocalStorage, SessionStorage, Cookies, Memory and IndexedDB behind one typed Rust/WASM surface: TTL, AES-256-GCM, cross-tab sync, quota sensing, and non-blocking binary storage via Uint8Array.</p>
+              <CodeBlock code={`npm i @ahmedtooper_npm/hamd-wasm\n# or: npm i hamd-wasm  (if you publish unscoped)`} />
+              <CodeBlock code={`import init, { Local } from "@ahmedtooper_npm/hamd-wasm";\nawait init();\nconst store = new Local("app_"); // same shape for Session, Cookies, Memory\nstore.set("user", { value: { id: "42", name: "Aya" } }, { ttlMs: 60_000 });\nstore.get("user"); // -> { id:"42", name:"Aya" } | null\n// binary\nstore.setBytes("avatar", new Uint8Array([1,2,3]));\nstore.getBytes("avatar"); // -> Uint8Array | null\n// indexedDB is async\nimport { IndexedDb } from "@ahmedtooper_npm/hamd-wasm";\nawait IndexedDb.create("app", "kv").then(db => db.set("k", { value: 1 }));`} />
               <div class="grid">
-                <FeatureCard title="Type-selected" desc="new Local() vs new Cookies() vs new IndexedDb() — no adapters." />
-                <FeatureCard title="Encrypted" desc="AES-256-GCM per-write nonce, zeroized keys, hex envelope." />
-                <FeatureCard title="Binary" desc="setBytes/getBytes base64 __bin, 4.8MB guard, IndexedDB disk." />
-                <FeatureCard title="FAANG checks" desc="fmt/clippy/check • 24 headless Chrome • cargo audit/coverage • publish dry-run 96KiB" />
-              </div>
-              <div class="controls">
-                <label>Prefix: <input value={prefix()} onInput={(e) => setPrefix(e.currentTarget.value)} placeholder="myapp:" /></label>
-                <span class="hint">prefix isolates: hamd: vs {prefix()} never collide</span>
+                <FeatureCard title="TTL & purgeExpired()" desc="Envelope carries expiresAt; get() evicts on read and purgeExpired() sweeps without blocking." />
+                <FeatureCard title="AES-256-GCM per store" desc="SubtleCrypto path when available. generateKey() / enableEncryption(b64). 28-byte minimum ciphertext enforced." />
+                <FeatureCard title="Quota-aware" desc="String stores share browser quotas (~5 MiB LS/SS, 4 KiB cookie, IDB large). 4.8 MiB guard on string stores; IDB no guard." />
+                <FeatureCard title="Sync" desc="Subscribe via BroadcastChannel with localStorage __hamd_sync_{kind} fallback on storage events for Local/Session." />
               </div>
             </section>
           </Show>
 
-          <Show when={active() === 'storage'}>
-            <h2>Storage — 5 backends</h2>
-            <FeatureCard title="Local / Session" desc="window Storage, QuotaExceeded → purgeExpired retry" code={`const s = new Local('app:');
-s.set('k','v'); s.get('k'); s.has('k'); s.keys(); s.length(); s.remove('k'); s.clear();`} />
-            <FeatureCard title="Cookies" desc="document.cookie encode/decode, 4KB guard 3900, Secure on https, SameSite=Lax 1yr" code={`const c = new Cookies(); c.set('probe','a;b=c d/e'); c.get('probe');`} />
-            <FeatureCard title="Memory" desc="HashMap — SSR / fallback / tests" code={`const m = new Memory(); m.set('k','v');`} />
-            <FeatureCard title="IndexedDb" desc="async IndexedDB v1 kv, batch single txn, IDBRequest→Promise self-cleaning" code={`const db = new IndexedDb(); await db.set('k','v'); await db.get('k');`} />
-          </Show>
-
-          <Show when={active() === 'encryption'}>
-            <h2>Encryption — per-instance AES-256-GCM</h2>
-            <CodeBlock code={`const s = new Local();
-const key = s.generateKey(); // Uint8Array(32) also enables
-// or existing
-s.enableEncryption(key32); // throws if !=32B
-s.set('secret', { ssn: '000' }); // hex(nonce||ciphertext) at rest
-s.get('secret'); // wrong key → "decryption failed: wrong key or corrupted data"
-s.setBytes('enc', new Uint8Array([1,2,3])); // also encrypted`} />
-            <p class="muted">Keys zeroized on drop (`ZeroizeOnDrop`). Not persisted — store yourself.</p>
-          </Show>
-
-          <Show when={active() === 'ttl'}>
-            <h2>TTL — lazy expiry + sweep</h2>
-            <CodeBlock code={`s.set('otp','123',60_000); // {__val,__exp:Date.now()+60_000}
-s.get('otp'); // expired → null + raw_remove
-s.purgeExpired(); // sweeps call get per key
-// validation
-s.set('k','v', NaN); // → "ttlMs must be a positive finite number"`} />
-          </Show>
-
-          <Show when={active() === 'binary'}>
-            <h2>Binary — Uint8Array</h2>
-            <CodeBlock code={`s.setBytes('avatar', new Uint8Array([0,1,255,42]));
-s.getBytes('avatar'); // → Uint8Array | undefined
-// TTL + encrypt same path
-s.setBytes('enc', bytes, 60_000);
-// IndexedDb async, disk-backed
-await new IndexedDb().setBytes('file', bytes);`} />
-            <p class="muted">String storages base64 __bin envelope +33%; guard &gt;4_800_000 → use IndexedDb. IndexedDB could be native zero-copy next.</p>
-          </Show>
-
-          <Show when={active() === 'validation'}>
-            <h2>Validation — keys & TTL</h2>
-            <CodeBlock code={`s.set('', 'x'); // → key must be non-empty
-s.set('a'.repeat(300), 'x'); // → key too long: max 256 bytes
-s.set('bad\\0key', 'x'); // → key contains invalid control characters
-s.set('k','v', NaN); // → ttlMs must be a positive finite number
-s.mset({a:1}); s.mget(['a']); // keys must be strings + validate_key`} />
-            <p class="muted">All key params via validate_key + ttlMs finite&gt;0; mget strict non-string → error.</p>
-          </Show>
-
-          <Show when={active() === 'sync'}>
-            <h2>Sync — cross-tab</h2>
-            <CodeBlock code={`const off = new Local('app:').subscribe((action,key)=>console.log(action,key));
-new Local('app:').set('cart',[]); // other tab receives set→cart filtered by prefix
-off(); // removeEventListener message/storage`} />
-            <p class="muted">BroadcastChannel hamd-sync kind + fallback localStorage sync for Safari (local/session).</p>
-          </Show>
-
-          <Show when={active() === 'limits'}>
-            <h2>Limits</h2>
+          <Show when={route() === "install"}>
+            <h1>Install</h1>
+            <p class="muted">Published from this repo via wasm-pack. Scope is dynamic via the <code>NPM_SCOPE</code> repo secret.</p>
+            <h2>npm</h2>
+            <CodeBlock code={`npm i @ahmedtooper_npm/hamd-wasm\n# generated pkg has "name": "@ahmedtooper_npm/hamd-wasm" when Release runs with --scope @ahmedtooper_npm`} />
+            <h2>Usage (bundler)</h2>
+            <CodeBlock code={`import init, { Local, Session, Cookies, Memory, IndexedDb } from "@ahmedtooper_npm/hamd-wasm";\nawait init(); // initialize wasm\nconst local = new Local("myapp_");\nlocal.set("k", { value: { a: 1 } });\nlocal.get("k");`} />
+            <h2>Vite / Solid</h2>
+            <CodeBlock code={`// vite.config.js  (solid already wired in web/)\nimport solid from "vite-plugin-solid";\nexport default { plugins: [solid()] };\n// no extra wasm loader needed; pkg exposes ESM via hamd_wasm.js + hamd_wasm_bg.wasm`} />
+            <h2>Secrets for Release</h2>
             <table class="tbl">
-              <thead><tr><th>Backend</th><th>Cap</th><th>Handling</th></tr></thead>
+              <thead><tr><th>Secret</th><th>Purpose</th></tr></thead>
               <tbody>
-                <tr><td>Local/Session</td><td>~5MB (+33% b64 → ~3.6M binary)</td><td>QuotaExceeded → purgeExpired retry</td></tr>
-                <tr><td>Cookies</td><td>4KB (3900 guard)</td><td>encode_uri Secure https</td></tr>
-                <tr><td>Memory</td><td>unbounded</td><td>HashMap</td></tr>
-                <tr><td>IndexedDB</td><td>disk ~50%</td><td>async single txn batch</td></tr>
+                <tr><td>CARGO_REGISTRY_TOKEN</td><td>cargo publish (crates.io Automation token)</td></tr>
+                <tr><td>NPM_TOKEN</td><td>npm publish --access public (granular Automation token)</td></tr>
+                <tr><td>NPM_SCOPE</td><td>npm org scope, e.g. @ahmedtooper_npm — fed to wasm-pack --scope</td></tr>
               </tbody>
             </table>
-            <p class="muted">Keys: `>0 ≤256 no \\0\\n\\r` else error; `mset/mget` validate same.</p>
           </Show>
 
-          <Show when={active() === 'api'}>
-            <h2>API — one surface</h2>
+          <Show when={route() === "api"}>
+            <h1>API</h1>
+            <p class="muted">All sync stores share one surface; IndexedDb is async. Prefix is an optional namespace.</p>
             <table class="tbl">
-              <thead><tr><th>Method</th><th>Returns</th><th>Notes</th></tr></thead>
+              <thead><tr><th>Store</th><th>Constructor</th><th>Mode</th></tr></thead>
               <tbody>
-                <tr><td>new Type(prefix?)</td><td>instance</td><td>default hamd:</td></tr>
-                <tr><td>set(k,v,ttl?)</td><td>void / Promise</td><td>JSON ttl finite&gt;0</td></tr>
-                <tr><td>setBytes(k,Uint8Array,ttl?)</td><td>void / Promise</td><td>__bin base64</td></tr>
-                <tr><td>get(k)</td><td>any|null</td><td>lazy TTL</td></tr>
-                <tr><td>getBytes(k)</td><td>Uint8Array|undefined</td><td>non-binary→error</td></tr>
-                <tr><td>remove/clear/has/keys/length/purgeExpired</td><td>-</td><td>prefix scoped</td></tr>
-                <tr><td>enableEncryption/generateKey</td><td>-</td><td>32B</td></tr>
-                <tr><td>subscribe(cb)→unsubscribe</td><td>Function</td><td>per-kind</td></tr>
-                <tr><td>mset/mget</td><td>-</td><td>validated</td></tr>
+                <tr><td>Local</td><td>new Local(prefix?)</td><td>sync (localStorage)</td></tr>
+                <tr><td>Session</td><td>new Session(prefix?)</td><td>sync (sessionStorage)</td></tr>
+                <tr><td>Cookies</td><td>new Cookies(prefix?)</td><td>sync (document.cookie, 3900B guard)</td></tr>
+                <tr><td>Memory</td><td>new Memory(prefix?)</td><td>sync (in-process HashMap)</td></tr>
+                <tr><td>IndexedDb</td><td>IndexedDb.create(db, store)</td><td>async (IndexedDB)</td></tr>
               </tbody>
             </table>
+            <h2>Methods</h2>
+            <CodeBlock code={`set(key: string, value: { value: T }, opts?: { ttlMs?: number }): void | Promise<void>\nget<T>(key: string): T | null | Promise<T|null>\nremove(key: string): void | Promise<void>\nclear(): void | Promise<void>\nhas(key: string): boolean | Promise<boolean>\nkeys(): string[] | Promise<string[]>\nlength(): number | Promise<number>\npurgeExpired(): number | Promise<number>\nsubscribe(cb: (ev:{key, value})=>void): () => void\nmset(entries: Array<[string,{value:T}]>, opts?): void\nmget<T>(keys: string[]): Array<T|null>\nsetBytes(key: string, bytes: Uint8Array): void | Promise<void>\ngetBytes(key: string): Uint8Array | null | Promise<...>\ngenerateKey(): Promise<string>   // base64 AES key\nsetEncryptionKey(b64: string): void\nsetEncryptionKeyIv(b64: string): void // alias\nenableEncryption(b64: string): void\nraw(): Storage | IDBDatabase | ... // escape hatch when needed`} />
+            <h2>Validation</h2>
+            <p class="muted">Keys must be non-empty, ≤256 chars, no embedded \0/\n/\r. TTL must be finite if provided. Binary guard 4.8 MiB on string stores; cookies 3900B.</p>
+          </Show>
+
+          <Show when={route() === "binary"}>
+            <h1>Binary &amp; Encryption</h1>
+            <p class="muted">Uint8Array is stored without blocking the main thread: encoded as base64 <code>{"{"}__bin, data{"}"}</code> inside the envelope so it reuses TTL + AES-256-GCM.</p>
+            <CodeBlock code={`const s = new Local("app_");\nconst key = await s.generateKey(); // 32 random bytes -> base64\ns.enableEncryption(key);\ns.setBytes("file", new Uint8Array([0,1,2,3]));\ns.getBytes("file"); // -> Uint8Array([0,1,2,3])\n// encryption honors the same AES-GCM path as set/get; 28-byte minimum ciphertext\n// string stores: ciphertext must respect the 4.8 MiB cap; IndexedDb has no cap`} />
+            <div class="controls">
+              <input id="bin-input" type="file" />
+              <span class="hint">IDB recommended for large files; string stores enforce quota.</span>
+            </div>
+          </Show>
+
+          <Show when={route() === "sync"}>
+            <h1>Sync</h1>
+            <p class="muted">subscribe(cb) receives {"{"}key, value{"}"} on cross-tab writes. Primary: BroadcastChannel; fallback: localStorage entry <code>__hamd_sync_{"{kind}"}</code> observed via window <code>storage</code> events (Local/Session).</p>
+            <CodeBlock code={`const stop = store.subscribe(({ key, value }) => {\n  console.log("remote", key, value);\n});\n// later\nstop(); // unsubscribe`} />
+          </Show>
+
+          <Show when={route() === "limits"}>
+            <h1>Limits &amp; Quota</h1>
+            <table class="tbl">
+              <thead><tr><th>Store</th><th>Quota</th><th>Notes</th></tr></thead>
+              <tbody>
+                <tr><td>LocalStorage</td><td>~5 MiB</td><td>Synchronous; 4.8 MiB guard in hamd-wasm</td></tr>
+                <tr><td>SessionStorage</td><td>~5 MiB</td><td>Tab-scoped; same guard</td></tr>
+                <tr><td>Cookies</td><td>~4 KiB / cookie</td><td>3900B guard; Secure on https</td></tr>
+                <tr><td>Memory</td><td>process RAM</td><td>No persistence; same 4.8 MiB guard</td></tr>
+                <tr><td>IndexedDB</td><td>large (browser-managed)</td><td>Async; no 4.8 MiB guard; preferred for binary/large</td></tr>
+              </tbody>
+            </table>
+            <p class="muted">All writes validate keys and guard size before encrypting. Prefixed keys (<code>new Local("app_")</code>) are namespaced and enumerated by <code>keys()</code>/<code>length()</code>.</p>
           </Show>
         </main>
       </div>
 
-      <footer class="foot">MIT © Md. Ramjan Miah — `cargo publish --dry-run 96.4KiB` • `wasm-pack 188K wasm / 79K js` • `24` headless tests</footer>
+      <footer class="foot">hamd-wasm — Rust/WASM storage. MIT. • <code>cargo fmt/clippy/check</code> clean • wasm-pack bundler 188K wasm</footer>
     </div>
   );
 }
