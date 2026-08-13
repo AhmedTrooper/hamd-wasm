@@ -66,4 +66,4 @@ jobs:
       - name: Install cargo-llvm-cov
         run: cargo install cargo-llvm-cov
       - name: coverage
-        run: cargo llvm-cov --target wasm32-unknown-unknown --no-report
+        run: cargo llvm-cov --no-report
