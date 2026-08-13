@@ -47,10 +47,24 @@ impl SyncState {
             && let Some(window) = web_sys::window()
             && let Ok(Some(storage)) = window.local_storage()
         {
-            let payload = format!(
-                "{{\"action\":\"{action}\",\"prefix\":\"{prefix}\",\"key\":\"{key}\",\"ts\":{}}}",
-                js_sys::Date::now()
-            );
+            let msg = js_sys::Object::new();
+            let fields = [
+                ("action", JsValue::from_str(action)),
+                ("prefix", JsValue::from_str(prefix)),
+                ("key", JsValue::from_str(key)),
+                ("ts", JsValue::from_f64(js_sys::Date::now())),
+            ];
+            for (name, value) in fields {
+                if js_sys::Reflect::set(&msg, &JsValue::from_str(name), &value).is_err() {
+                    return;
+                }
+            }
+            let Ok(payload) = js_sys::JSON::stringify(&msg) else {
+                return;
+            };
+            let Some(payload) = payload.as_string() else {
+                return;
+            };
             let sync_key = format!("__hamd_sync_{}", self.kind);
             let _ = storage.set_item(&sync_key, &payload);
         }
