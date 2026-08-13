@@ -317,6 +317,50 @@ button {
   height: 16px;
 }
 
+/* Hamburger button — hidden on desktop, visible ≤ 960px */
+.nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-right: 8px;
+  background: transparent;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  color: var(--fg);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+.nav-toggle:hover {
+  background: hsl(var(--accent));
+  border-color: hsl(var(--ring));
+}
+.nav-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Backdrop for off-canvas sidebar */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: hsl(0 0% 0% / 0.5);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index: 35;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+/* Body scroll lock when drawer is open */
+body.nav-locked {
+  overflow: hidden;
+}
+
 /* =========================================================
    Sidebar — shadcn sidebar
    ========================================================= */
@@ -1007,33 +1051,66 @@ button {
 }
 
 /* =========================================================
-   Responsive — works down to 250 px / 300 px
+   Responsive — mobile-first, works down to 250 px / 300 px
    ========================================================= */
 
-/* Tablet */
+/* Fluid type for hero & sections */
+.hero h1 {
+  font-size: clamp(28px, 5vw, 48px);
+}
+.section h2 {
+  font-size: clamp(20px, 2.6vw, 30px);
+}
+.section h3 {
+  font-size: clamp(15px, 2vw, 20px);
+}
+.hero .lead {
+  font-size: clamp(14px, 1.8vw, 17px);
+}
+
+/* Tablet & below — show hamburger, sidebar becomes off-canvas drawer */
 @media (max-width: 960px) {
+  .nav-toggle {
+    display: inline-flex;
+  }
+
   .layout {
     grid-template-columns: 1fr;
     grid-template-areas:
       "top"
-      "side"
       "main";
   }
+
   .sidebar {
-    position: static;
-    height: auto;
-    max-height: 240px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: min(280px, 86vw);
+    z-index: 40;
+    padding: 18px 14px 24px;
+    border-right: 1px solid hsl(var(--border));
+    background: hsl(var(--background));
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
     overflow-y: auto;
-    border-right: none;
-    border-bottom: 1px solid hsl(var(--border));
-    padding: 14px 12px 16px;
   }
-  .nav-group {
-    margin-bottom: 12px;
+
+  .layout.nav-open .sidebar {
+    transform: translateX(0);
+    box-shadow: 0 0 32px hsl(0 0% 0% / 0.4);
   }
+
+  .layout.nav-open .sidebar-backdrop {
+    display: block;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
   .hero-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
   .main {
     padding: 32px 32px 64px;
   }
@@ -1043,51 +1120,48 @@ button {
 @media (max-width: 640px) {
   .topbar {
     height: 52px;
-    padding: 0 14px;
+    padding: 0 12px;
   }
-  .brand-sub,
+  .brand-sub {
+    display: none;
+  }
   .brand-version {
     display: none;
   }
   .topnav-link {
     display: none;
   }
+
   .main {
     padding: 24px 16px 56px;
+    max-width: 100%;
   }
+
   .hero {
     padding-bottom: 28px;
     margin-bottom: 28px;
   }
-  .hero h1 {
-    font-size: 26px;
-  }
-  .hero .lead {
-    font-size: 14px;
-  }
   .hero-grid {
     grid-template-columns: 1fr;
-  }
-  .section h2 {
-    font-size: 19px;
   }
   .section h3 {
     font-size: 15px;
   }
+
   .code {
-    font-size: 11.5px;
-    padding: 12px;
+    font-size: 12px;
+    padding: 12px 14px;
   }
   .table {
-    font-size: 12px;
+    font-size: 12.5px;
   }
   .table th,
   .table td {
     padding: 8px 10px;
   }
   .tab-body {
-    font-size: 11.5px;
-    padding: 12px;
+    font-size: 12px;
+    padding: 12px 14px;
   }
   .doc-foot {
     flex-direction: column;
@@ -1100,9 +1174,6 @@ button {
   .main {
     padding: 18px 12px 48px;
   }
-  .hero h1 {
-    font-size: 22px;
-  }
   .hero-cta {
     flex-direction: column;
     align-items: stretch;
@@ -1110,26 +1181,32 @@ button {
   .btn {
     width: 100%;
   }
-  .sidebar {
-    padding: 12px 10px;
-  }
-  .nav-item {
-    padding: 5px 8px;
-    font-size: 12px;
-  }
   .section {
     padding: 22px 0 18px;
   }
   .foot-links {
     gap: 12px;
   }
+  .tabs-list {
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
 }
 
-/* Extra-tiny (≤ 250 px / 300 px) */
+/* Extra-tiny (≤ 250 px wide OR ≤ 300 px tall) */
 @media (max-width: 250px), (max-height: 300px) {
   .topbar {
     height: 44px;
     padding: 0 8px;
+  }
+  .nav-toggle {
+    width: 30px;
+    height: 30px;
+    margin-right: 4px;
+  }
+  .nav-toggle svg {
+    width: 14px;
+    height: 14px;
   }
   .brand-mark {
     width: 24px;
@@ -1153,8 +1230,8 @@ button {
   }
 
   .sidebar {
-    padding: 10px 8px;
-    max-height: 180px;
+    width: min(220px, 92vw);
+    padding: 12px 10px 20px;
   }
   .nav-label {
     font-size: 9.5px;
@@ -1162,12 +1239,12 @@ button {
     margin-bottom: 4px;
   }
   .nav-item {
-    font-size: 10.5px;
+    font-size: 11px;
     padding: 4px 8px;
     border-radius: 4px;
   }
   .nav-group {
-    margin-bottom: 8px;
+    margin-bottom: 10px;
   }
   .sidebar-foot {
     display: none;
@@ -1354,13 +1431,10 @@ button {
   }
 }
 
-/* Short landscape */
+/* Short landscape — collapse vertical padding */
 @media (max-height: 300px) {
   .layout {
     grid-template-rows: 44px 1fr;
-  }
-  .sidebar {
-    max-height: 110px;
   }
   .main {
     padding-top: 14px;
@@ -1378,5 +1452,11 @@ button {
     width: auto;
     height: 30px;
     font-size: 11px;
+  }
+  .hero-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .card {
+    padding: 10px 12px;
   }
 }
