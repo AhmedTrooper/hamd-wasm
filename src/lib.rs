@@ -263,6 +263,14 @@ macro_rules! impl_storage {
                         .get(0)
                         .as_string()
                         .ok_or_else(|| JsValue::from_str("mset keys must be strings"))?;
+                    validate_key(&key)?;
+                }
+                for i in 0..pairs.length() {
+                    let pair: js_sys::Array = pairs.get(i).unchecked_into();
+                    let key = pair
+                        .get(0)
+                        .as_string()
+                        .ok_or_else(|| JsValue::from_str("mset keys must be strings"))?;
                     self.set(&key, pair.get(1), ttl_ms)?;
                 }
                 Ok(())
@@ -605,6 +613,14 @@ impl IndexedDb {
 
     pub async fn mset(&self, entries: js_sys::Object, ttl_ms: Option<f64>) -> Result<(), JsValue> {
         let pairs = js_sys::Object::entries(&entries);
+        for i in 0..pairs.length() {
+            let pair: js_sys::Array = pairs.get(i).unchecked_into();
+            let key = pair
+                .get(0)
+                .as_string()
+                .ok_or_else(|| JsValue::from_str("mset keys must be strings"))?;
+            validate_key(&key)?;
+        }
         for i in 0..pairs.length() {
             let pair: js_sys::Array = pairs.get(i).unchecked_into();
             let key = pair

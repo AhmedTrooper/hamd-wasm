@@ -79,6 +79,22 @@ fn memory_mset_mget() {
 }
 
 #[wasm_bindgen_test]
+fn memory_mset_validates_all_keys_before_writing() {
+    let store = Memory::new(None);
+    let obj = js_sys::Object::new();
+    js_sys::Reflect::set(
+        &obj,
+        &JsValue::from_str("valid"),
+        &JsValue::from_str("must not be written"),
+    )
+    .unwrap();
+    js_sys::Reflect::set(&obj, &JsValue::from_str(""), &JsValue::from_str("invalid")).unwrap();
+
+    assert!(store.mset(obj, None).is_err());
+    assert!(!store.has("valid").unwrap());
+}
+
+#[wasm_bindgen_test]
 fn memory_ttl_validation_rejects_invalid() {
     let store = Memory::new(None);
     let err = store
