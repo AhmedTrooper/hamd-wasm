@@ -118,6 +118,30 @@ fn memory_object_roundtrip() {
 }
 
 #[wasm_bindgen_test]
+fn memory_preserves_objects_with_expiration_like_fields() {
+    let store = Memory::new(None);
+    let val = js_sys::Object::new();
+    js_sys::Reflect::set(&val, &JsValue::from_str("__exp"), &JsValue::from_f64(1.0)).unwrap();
+    js_sys::Reflect::set(
+        &val,
+        &JsValue::from_str("name"),
+        &JsValue::from_str("ordinary object"),
+    )
+    .unwrap();
+
+    store.set("object", val.into(), None).unwrap();
+
+    let got = store.get("object").unwrap();
+    assert_eq!(
+        js_sys::Reflect::get(&got, &JsValue::from_str("name"))
+            .unwrap()
+            .as_string()
+            .unwrap(),
+        "ordinary object"
+    );
+}
+
+#[wasm_bindgen_test]
 fn memory_encryption_roundtrip() {
     let store = Memory::new(None);
     let key = store.generate_key().unwrap();
