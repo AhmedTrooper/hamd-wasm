@@ -1,0 +1,22 @@
+# Build artifacts
+/target/
+debug/
+**/*.rs.bk
+
+# Cargo.lock for libraries (remove this line if building a binary)
+# Cargo.lock
+
+# Editor & IDE
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Project specific
+source.md
