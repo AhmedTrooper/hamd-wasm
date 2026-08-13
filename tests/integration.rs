@@ -518,3 +518,13 @@ fn key_validation_rejects_empty_and_long() {
         .unwrap_err();
     assert!(err.as_string().unwrap().contains("invalid control"));
 }
+
+#[wasm_bindgen_test]
+fn key_validation_limits_utf8_bytes() {
+    let store = Memory::new(None);
+    let key = "☃".repeat(86); // 258 UTF-8 bytes, despite 86 Unicode scalar values.
+    let error = store
+        .set(&key, JsValue::from_str("value"), None)
+        .unwrap_err();
+    assert!(error.as_string().unwrap().contains("256 bytes"));
+}
