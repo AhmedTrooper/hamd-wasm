@@ -13,6 +13,8 @@ use parking_lot::Mutex;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
+use base64::Engine as _;
+
 use crate::crypto::EncryptionKey;
 use crate::ops::{StorageError, StorageOps};
 
@@ -272,6 +274,82 @@ macro_rules! impl_storage {
                     js_sys::Reflect::set(&result, &JsValue::from_str(&key), &value)?;
                 }
                 Ok(result.into())
+            }
+
+            #[wasm_bindgen(js_name = "setBytes")]
+            pub fn set_bytes(
+                &self,
+                key: &str,
+                bytes: &[u8],
+                ttl_ms: Option<f64>,
+            ) -> Result<(), JsValue> {
+                validate_key(key)?;
+                if let Some(ms) = ttl_ms
+                    && (!ms.is_finite() || ms <= 0.0)
+                {
+                    return Err(JsValue::from_str("ttlMs must be a positive finite number"));
+                }
+                let b64_len = (bytes.len() * 4).div_ceil(3) + 32;
+                if b64_len > 4_800_000 {
+                    return Err(JsValue::from_str(
+                        "bytes too large for string storage, use IndexedDb",
+                    ));
+                }
+                let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+                let json = format!("{{\"__bin\":true,\"data\":\"{b64}\"}}");
+                let (full_key, stored) = {
+                    let mut guard = self.state.lock();
+                    let full_key = format!("{}{}", guard.prefix, key);
+                    let payload = match ttl_ms {
+                        Some(ms) => envelope::wrap(&json, ms),
+                        None => json,
+                    };
+                    let stored = match &guard.encryption_key {
+                        Some(ek) => crypto::encrypt(ek.bytes(), payload.as_bytes())
+                            .map_err(StorageError::Other)?,
+                        None => payload,
+                    };
+                    match guard.backend.raw_set(&full_key, &stored) {
+                        Ok(()) => {
+                            let prefix = guard.prefix.clone();
+                            guard.sync.notify("set", &prefix, key);
+                            return Ok(());
+                        }
+                        Err(StorageError::QuotaExceeded) => (full_key, stored),
+                        Err(e) => return Err(e.into()),
+                    }
+                };
+                self.purge_expired()?;
+                let mut guard = self.state.lock();
+                guard
+                    .backend
+                    .raw_set(&full_key, &stored)
+                    .map_err(JsValue::from)?;
+                let prefix = guard.prefix.clone();
+                guard.sync.notify("set", &prefix, key);
+                Ok(())
+            }
+
+            #[wasm_bindgen(js_name = "getBytes")]
+            pub fn get_bytes(&self, key: &str) -> Result<Option<Vec<u8>>, JsValue> {
+                validate_key(key)?;
+                let val = self.get(key)?;
+                if val.is_null() || val.is_undefined() {
+                    return Ok(None);
+                }
+                let is_bin = js_sys::Reflect::get(&val, &JsValue::from_str("__bin"))?
+                    .as_bool()
+                    .unwrap_or(false);
+                if !is_bin {
+                    return Err(JsValue::from_str("value is not binary data"));
+                }
+                let data = js_sys::Reflect::get(&val, &JsValue::from_str("data"))?
+                    .as_string()
+                    .ok_or_else(|| JsValue::from_str("invalid binary data"))?;
+                let bytes = base64::engine::general_purpose::STANDARD
+                    .decode(&data)
+                    .map_err(|e| JsValue::from_str(&format!("base64 decode: {e}")))?;
+                Ok(Some(bytes))
             }
         }
     };
@@ -539,5 +617,66 @@ impl IndexedDb {
             js_sys::Reflect::set(&result, &JsValue::from_str(&key), &value)?;
         }
         Ok(result.into())
+    }
+
+    #[wasm_bindgen(js_name = "setBytes")]
+    pub async fn set_bytes(
+        &self,
+        key: &str,
+        bytes: Vec<u8>,
+        ttl_ms: Option<f64>,
+    ) -> Result<(), JsValue> {
+        validate_key(key)?;
+        if let Some(ms) = ttl_ms
+            && (!ms.is_finite() || ms <= 0.0)
+        {
+            return Err(JsValue::from_str("ttlMs must be a positive finite number"));
+        }
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+        let json = format!("{{\"__bin\":true,\"data\":\"{b64}\"}}");
+        let full_key = format!("{}{}", self.state.lock().prefix, key);
+        let payload = match ttl_ms {
+            Some(ms) => envelope::wrap(&json, ms),
+            None => json,
+        };
+        let stored = self.encrypt_value(&payload)?;
+        let db = self.db().await?;
+        let needs_retry = match idb::raw_set(&db, &full_key, &stored).await {
+            Ok(()) => false,
+            Err(StorageError::QuotaExceeded) => true,
+            Err(e) => return Err(e.into()),
+        };
+        if needs_retry {
+            self.purge_expired().await?;
+            idb::raw_set(&db, &full_key, &stored)
+                .await
+                .map_err(JsValue::from)?;
+        }
+        let guard = self.state.lock();
+        let prefix = guard.prefix.clone();
+        guard.sync.notify("set", &prefix, key);
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = "getBytes")]
+    pub async fn get_bytes(&self, key: &str) -> Result<Option<Vec<u8>>, JsValue> {
+        validate_key(key)?;
+        let val = self.get(key).await?;
+        if val.is_null() || val.is_undefined() {
+            return Ok(None);
+        }
+        let is_bin = js_sys::Reflect::get(&val, &JsValue::from_str("__bin"))?
+            .as_bool()
+            .unwrap_or(false);
+        if !is_bin {
+            return Err(JsValue::from_str("value is not binary data"));
+        }
+        let data = js_sys::Reflect::get(&val, &JsValue::from_str("data"))?
+            .as_string()
+            .ok_or_else(|| JsValue::from_str("invalid binary data"))?;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&data)
+            .map_err(|e| JsValue::from_str(&format!("base64 decode: {e}")))?;
+        Ok(Some(bytes))
     }
 }

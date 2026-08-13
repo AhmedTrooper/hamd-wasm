@@ -35,6 +35,7 @@ strip = true          # Strip debug symbols and names
 
 [dependencies]
 aes-gcm = "0.11.0"
+base64 = "0.22.1"
 getrandom = { version = "0.4.3", features = ["wasm_js"] }
 hex = "0.4.3"
 js-sys = "0.3.104"
