@@ -20,6 +20,20 @@ use crate::ops::{StorageError, StorageOps};
 
 const BINARY_MARKER: &str = "hamd:bin:v1";
 
+#[wasm_bindgen(typescript_custom_section)]
+const TYPESCRIPT_TYPES: &str = r#"
+export interface IndexedDbOptions {
+  prefix?: string;
+  databaseName?: string;
+}
+"#;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(typescript_type = "IndexedDbOptions")]
+    pub type IndexedDbOptions;
+}
+
 fn validate_key(key: &str) -> Result<(), JsValue> {
     if key.is_empty() {
         return Err(JsValue::from_str("key must be non-empty"));
@@ -500,9 +514,14 @@ impl IndexedDb {
     // not cross-thread sharing, so the !Send JS handle types inside are fine.
     #[allow(clippy::arc_with_non_send_sync)]
     #[wasm_bindgen(constructor)]
-    pub fn new(options: JsValue) -> Result<Self, JsValue> {
-        let prefix = option_string(&options, "prefix")?;
-        let database_name = option_string(&options, "databaseName")?;
+    pub fn new(options: Option<IndexedDbOptions>) -> Result<Self, JsValue> {
+        let default_options = JsValue::UNDEFINED;
+        let options = options
+            .as_ref()
+            .map(AsRef::<JsValue>::as_ref)
+            .unwrap_or(&default_options);
+        let prefix = option_string(options, "prefix")?;
+        let database_name = option_string(options, "databaseName")?;
         Ok(Self {
             state: Arc::new(Mutex::new(IndexedDbInner {
                 backend: idb::IdbBackend::new(),

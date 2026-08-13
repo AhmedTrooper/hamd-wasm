@@ -255,7 +255,7 @@ fn local_roundtrip_browser_only() {
 
 #[wasm_bindgen_test]
 async fn indexeddb_roundtrip_browser_only() {
-    let db = IndexedDb::new(JsValue::UNDEFINED).unwrap();
+    let db = IndexedDb::new(None).unwrap();
     // IndexedDB may be unavailable in some contexts.
     if db
         .set("probe", JsValue::from_str("ok"), None)
@@ -284,7 +284,7 @@ async fn indexeddb_encryption_roundtrip_browser_only() {
         &JsValue::from_str("hamd-encrypted-test"),
     )
     .unwrap();
-    let db = IndexedDb::new(options.clone().into()).unwrap();
+    let db = IndexedDb::new(Some(options.clone().unchecked_into())).unwrap();
     if db
         .set("probe", JsValue::from_str("ok"), None)
         .await
@@ -302,7 +302,7 @@ async fn indexeddb_encryption_roundtrip_browser_only() {
         db.get("secret").await.unwrap().as_string().unwrap(),
         "value"
     );
-    let reopened = IndexedDb::new(options.into()).unwrap();
+    let reopened = IndexedDb::new(Some(options.unchecked_into())).unwrap();
     reopened.enable_encryption(&key).unwrap();
     assert_eq!(
         reopened.get("secret").await.unwrap().as_string().unwrap(),
@@ -516,7 +516,7 @@ async fn memory_bytes_ttl_expiry() {
 
 #[wasm_bindgen_test]
 async fn indexeddb_bytes_roundtrip_browser_only() {
-    let db = IndexedDb::new(JsValue::UNDEFINED).unwrap();
+    let db = IndexedDb::new(None).unwrap();
     let data = vec![99u8, 42, 0, 255, 7, 8, 9];
     if db.set_bytes("bin_probe", data.clone(), None).await.is_err() {
         return;
