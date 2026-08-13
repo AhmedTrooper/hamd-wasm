@@ -24,10 +24,13 @@ serde-wasm-bindgen = "0.6.5"
 wasm-bindgen = "0.2.127"
 wasm-bindgen-futures = "0.4.77"
 web-sys = { version = "0.3.104", features = [
+    "BroadcastChannel",
     "DomException",
     "DomStringList",
     "Document",
     "Event",
+    "EventTarget",
+    "MessageEvent",
     "HtmlDocument",
     "IdbDatabase",
     "IdbFactory",

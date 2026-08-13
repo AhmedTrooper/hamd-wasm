@@ -4,6 +4,7 @@ mod envelope;
 mod idb;
 mod memory;
 mod ops;
+mod sync;
 mod web;
 
 use std::sync::Arc;
@@ -15,11 +16,12 @@ use crate::crypto::EncryptionKey;
 use crate::ops::StorageOps;
 
 macro_rules! impl_storage {
-    ($Name:ident, $InnerName:ident, $Backend:ty, $backend_init:expr) => {
+    ($Name:ident, $InnerName:ident, $Backend:ty, $backend_init:expr, $sync_kind:expr) => {
         struct $InnerName {
             backend: $Backend,
             prefix: String,
             encryption_key: Option<EncryptionKey>,
+            sync: sync::SyncState,
         }
 
         #[wasm_bindgen]
@@ -30,6 +32,9 @@ macro_rules! impl_storage {
 
         #[wasm_bindgen]
         impl $Name {
+            // wasm32 is single-threaded; Arc here is shared ownership across JS handles,
+            // not cross-thread sharing, so the !Send JS handle types inside are fine.
+            #[allow(clippy::arc_with_non_send_sync)]
             #[wasm_bindgen(constructor)]
             pub fn new(prefix: Option<String>) -> Self {
                 Self {
@@ -37,6 +42,7 @@ macro_rules! impl_storage {
                         backend: $backend_init,
                         prefix: prefix.unwrap_or_else(|| "hamd:".into()),
                         encryption_key: None,
+                        sync: sync::SyncState::new($sync_kind),
                     })),
                 }
             }
@@ -84,7 +90,10 @@ macro_rules! impl_storage {
                 guard
                     .backend
                     .raw_set(&full_key, &stored)
-                    .map_err(|e| JsValue::from_str(&e))
+                    .map_err(|e| JsValue::from_str(&e))?;
+                let prefix = guard.prefix.clone();
+                guard.sync.notify("set", &prefix, key);
+                Ok(())
             }
 
             pub fn get(&self, key: &str) -> Result<JsValue, JsValue> {
@@ -124,7 +133,10 @@ macro_rules! impl_storage {
                 guard
                     .backend
                     .raw_remove(&full_key)
-                    .map_err(|e| JsValue::from_str(&e))
+                    .map_err(|e| JsValue::from_str(&e))?;
+                let prefix = guard.prefix.clone();
+                guard.sync.notify("remove", &prefix, key);
+                Ok(())
             }
 
             pub fn clear(&self) -> Result<(), JsValue> {
@@ -144,6 +156,7 @@ macro_rules! impl_storage {
                         .raw_remove(k)
                         .map_err(|e| JsValue::from_str(&e))?;
                 }
+                guard.sync.notify("clear", &prefix, "");
                 Ok(())
             }
 
@@ -199,34 +212,56 @@ macro_rules! impl_storage {
                 }
                 Ok(())
             }
+
+            pub fn subscribe(&self, cb: js_sys::Function) -> Result<JsValue, JsValue> {
+                let id = {
+                    let mut guard = self.state.lock();
+                    let prefix = guard.prefix.clone();
+                    guard.sync.subscribe(prefix, cb)?
+                };
+                let state = self.state.clone();
+                Ok(Closure::once_into_js(move || {
+                    state.lock().sync.unsubscribe(id);
+                }))
+            }
         }
     };
 }
 
-impl_storage!(Local, LocalInner, web::WebBackend, web::WebBackend::local());
+impl_storage!(
+    Local,
+    LocalInner,
+    web::WebBackend,
+    web::WebBackend::local(),
+    "local"
+);
 impl_storage!(
     Session,
     SessionInner,
     web::WebBackend,
-    web::WebBackend::session()
+    web::WebBackend::session(),
+    "session"
 );
 impl_storage!(
     Memory,
     MemoryInner,
     memory::MemoryBackend,
-    memory::MemoryBackend::new()
+    memory::MemoryBackend::new(),
+    "memory"
 );
 impl_storage!(
     Cookies,
     CookiesInner,
     cookie::CookieBackend,
-    cookie::CookieBackend::new()
+    cookie::CookieBackend::new(),
+    "cookies"
 );
 
 struct IndexedDbInner {
     backend: idb::IdbBackend,
     prefix: String,
     encryption_key: Option<EncryptionKey>,
+    sync: sync::SyncState,
 }
 
 #[wasm_bindgen]
@@ -264,6 +299,9 @@ impl IndexedDb {
 
 #[wasm_bindgen]
 impl IndexedDb {
+    // wasm32 is single-threaded; Arc here is shared ownership across JS handles,
+    // not cross-thread sharing, so the !Send JS handle types inside are fine.
+    #[allow(clippy::arc_with_non_send_sync)]
     #[wasm_bindgen(constructor)]
     pub fn new(prefix: Option<String>) -> Self {
         Self {
@@ -271,6 +309,7 @@ impl IndexedDb {
                 backend: idb::IdbBackend::new(),
                 prefix: prefix.unwrap_or_else(|| "hamd:".into()),
                 encryption_key: None,
+                sync: sync::SyncState::new("indexeddb"),
             })),
         }
     }
@@ -306,7 +345,11 @@ impl IndexedDb {
         let db = self.db().await?;
         idb::raw_set(&db, &full_key, &stored)
             .await
-            .map_err(|e| JsValue::from_str(&e))
+            .map_err(|e| JsValue::from_str(&e))?;
+        let guard = self.state.lock();
+        let prefix = guard.prefix.clone();
+        guard.sync.notify("set", &prefix, key);
+        Ok(())
     }
 
     pub async fn get(&self, key: &str) -> Result<JsValue, JsValue> {
@@ -336,7 +379,11 @@ impl IndexedDb {
         let db = self.db().await?;
         idb::raw_remove(&db, &[full_key])
             .await
-            .map_err(|e| JsValue::from_str(&e))
+            .map_err(|e| JsValue::from_str(&e))?;
+        let guard = self.state.lock();
+        let prefix = guard.prefix.clone();
+        guard.sync.notify("remove", &prefix, key);
+        Ok(())
     }
 
     pub async fn clear(&self) -> Result<(), JsValue> {
@@ -351,7 +398,9 @@ impl IndexedDb {
             .collect();
         idb::raw_remove(&db, &doomed)
             .await
-            .map_err(|e| JsValue::from_str(&e))
+            .map_err(|e| JsValue::from_str(&e))?;
+        self.state.lock().sync.notify("clear", &prefix, "");
+        Ok(())
     }
 
     pub async fn has(&self, key: &str) -> Result<bool, JsValue> {
@@ -400,5 +449,17 @@ impl IndexedDb {
             self.get(&k).await?;
         }
         Ok(())
+    }
+
+    pub fn subscribe(&self, cb: js_sys::Function) -> Result<JsValue, JsValue> {
+        let id = {
+            let mut guard = self.state.lock();
+            let prefix = guard.prefix.clone();
+            guard.sync.subscribe(prefix, cb)?
+        };
+        let state = self.state.clone();
+        Ok(Closure::once_into_js(move || {
+            state.lock().sync.unsubscribe(id);
+        }))
     }
 }
