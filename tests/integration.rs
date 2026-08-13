@@ -269,7 +269,7 @@ fn local_roundtrip_browser_only() {
 
 #[wasm_bindgen_test]
 async fn indexeddb_roundtrip_browser_only() {
-    let db = IndexedDb::new(None, None);
+    let db = IndexedDb::new(None);
     // IndexedDB may be unavailable in some contexts.
     if db
         .set("probe", JsValue::from_str("ok"), None)
@@ -473,7 +473,7 @@ async fn memory_bytes_ttl_expiry() {
 
 #[wasm_bindgen_test]
 async fn indexeddb_bytes_roundtrip_browser_only() {
-    let db = IndexedDb::new(None, None);
+    let db = IndexedDb::new(None);
     let data = vec![99u8, 42, 0, 255, 7, 8, 9];
     if db.set_bytes("bin_probe", data.clone(), None).await.is_err() {
         return;

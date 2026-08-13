@@ -468,7 +468,15 @@ impl IndexedDb {
     // not cross-thread sharing, so the !Send JS handle types inside are fine.
     #[allow(clippy::arc_with_non_send_sync)]
     #[wasm_bindgen(constructor)]
-    pub fn new(prefix: Option<String>, database_name: Option<String>) -> Self {
+    pub fn new(prefix: Option<String>) -> Self {
+        Self::with_database(prefix, None)
+    }
+
+    // wasm32 is single-threaded; Arc here is shared ownership across JS handles,
+    // not cross-thread sharing, so the !Send JS handle types inside are fine.
+    #[allow(clippy::arc_with_non_send_sync)]
+    #[wasm_bindgen(js_name = "withDatabase")]
+    pub fn with_database(prefix: Option<String>, database_name: Option<String>) -> Self {
         Self {
             state: Arc::new(Mutex::new(IndexedDbInner {
                 backend: idb::IdbBackend::new(),

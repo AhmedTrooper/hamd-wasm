@@ -13,7 +13,7 @@ s.set('user', { name: 'Alice' });
 s.get('user'); // → {name:'Alice'}
 
 // The second argument optionally isolates IndexedDB from other applications.
-const db = new IndexedDb('myapp:', 'myapp-storage');
+const db = IndexedDb.withDatabase('myapp:', 'myapp-storage');
 await db.set('sess', { token: 'abc' });
 ```
 Prefixes isolate: `new Local('a:')` and `new Local('b:')` never collide. SSR uses `Memory`.
