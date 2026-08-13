@@ -422,11 +422,19 @@ pub struct IndexedDb {
 
 impl IndexedDb {
     async fn db(&self) -> Result<web_sys::IdbDatabase, JsValue> {
-        if let Some(db) = self.state.lock().backend.cached_db() {
-            return Ok(db);
-        }
-        let database_name = self.state.lock().database_name.clone();
-        let db = idb::open_db(&database_name).await.map_err(JsValue::from)?;
+        let (database_name, invalidated) = {
+            let mut guard = self.state.lock();
+            if let Some(db) = guard.backend.cached_db() {
+                return Ok(db);
+            }
+            (
+                guard.database_name.clone(),
+                guard.backend.invalidation_signal(),
+            )
+        };
+        let db = idb::open_db(&database_name, invalidated)
+            .await
+            .map_err(JsValue::from)?;
         self.state.lock().backend.set_cached_db(db.clone());
         Ok(db)
     }

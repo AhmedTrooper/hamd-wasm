@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use wasm_bindgen::JsCast;
@@ -12,15 +12,26 @@ const STORE_NAME: &str = "kv";
 
 pub(crate) struct IdbBackend {
     db: Option<web_sys::IdbDatabase>,
+    invalidated: Rc<Cell<bool>>,
 }
 
 impl IdbBackend {
     pub(crate) fn new() -> Self {
-        Self { db: None }
+        Self {
+            db: None,
+            invalidated: Rc::new(Cell::new(false)),
+        }
     }
 
-    pub(crate) fn cached_db(&self) -> Option<web_sys::IdbDatabase> {
+    pub(crate) fn cached_db(&mut self) -> Option<web_sys::IdbDatabase> {
+        if self.invalidated.replace(false) {
+            self.db = None;
+        }
         self.db.clone()
+    }
+
+    pub(crate) fn invalidation_signal(&self) -> Rc<Cell<bool>> {
+        self.invalidated.clone()
     }
 
     pub(crate) fn set_cached_db(&mut self, db: web_sys::IdbDatabase) {
@@ -28,7 +39,10 @@ impl IdbBackend {
     }
 }
 
-pub(crate) async fn open_db(database_name: &str) -> Result<web_sys::IdbDatabase, String> {
+pub(crate) async fn open_db(
+    database_name: &str,
+    invalidated: Rc<Cell<bool>>,
+) -> Result<web_sys::IdbDatabase, String> {
     let factory = web_sys::window()
         .ok_or_else(|| "no global window".to_string())?
         .indexed_db()
@@ -63,6 +77,7 @@ pub(crate) async fn open_db(database_name: &str) -> Result<web_sys::IdbDatabase,
     let on_version_change = Closure::wrap(Box::new({
         let db = db.clone();
         move |_event: web_sys::Event| {
+            invalidated.set(true);
             db.close();
         }
     }) as Box<dyn FnMut(web_sys::Event)>);
