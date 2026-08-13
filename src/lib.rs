@@ -16,6 +16,19 @@ use wasm_bindgen::prelude::*;
 use crate::crypto::EncryptionKey;
 use crate::ops::{StorageError, StorageOps};
 
+fn validate_key(key: &str) -> Result<(), JsValue> {
+    if key.is_empty() {
+        return Err(JsValue::from_str("key must be non-empty"));
+    }
+    if key.len() > 256 {
+        return Err(JsValue::from_str("key too long: max 256 bytes"));
+    }
+    if key.contains('\0') || key.contains('\n') || key.contains('\r') {
+        return Err(JsValue::from_str("key contains invalid control characters"));
+    }
+    Ok(())
+}
+
 macro_rules! impl_storage {
     ($Name:ident, $InnerName:ident, $Backend:ty, $backend_init:expr, $sync_kind:expr) => {
         struct $InnerName {
@@ -74,6 +87,7 @@ macro_rules! impl_storage {
                 value: JsValue,
                 ttl_ms: Option<f64>,
             ) -> Result<(), JsValue> {
+                validate_key(key)?;
                 if let Some(ms) = ttl_ms
                     && (!ms.is_finite() || ms <= 0.0)
                 {
@@ -118,6 +132,7 @@ macro_rules! impl_storage {
             }
 
             pub fn get(&self, key: &str) -> Result<JsValue, JsValue> {
+                validate_key(key)?;
                 let mut guard = self.state.lock();
                 let full_key = format!("{}{}", guard.prefix, key);
 
@@ -141,6 +156,7 @@ macro_rules! impl_storage {
             }
 
             pub fn remove(&self, key: &str) -> Result<(), JsValue> {
+                validate_key(key)?;
                 let mut guard = self.state.lock();
                 let full_key = format!("{}{}", guard.prefix, key);
                 guard.backend.raw_remove(&full_key).map_err(JsValue::from)?;
@@ -248,10 +264,12 @@ macro_rules! impl_storage {
             pub fn mget(&self, keys: js_sys::Array) -> Result<JsValue, JsValue> {
                 let result = js_sys::Object::new();
                 for i in 0..keys.length() {
-                    if let Some(key) = keys.get(i).as_string() {
-                        let value = self.get(&key)?;
-                        js_sys::Reflect::set(&result, &JsValue::from_str(&key), &value)?;
-                    }
+                    let Some(key) = keys.get(i).as_string() else {
+                        return Err(JsValue::from_str("mget keys must be strings"));
+                    };
+                    validate_key(&key)?;
+                    let value = self.get(&key)?;
+                    js_sys::Reflect::set(&result, &JsValue::from_str(&key), &value)?;
                 }
                 Ok(result.into())
             }
@@ -364,6 +382,7 @@ impl IndexedDb {
     }
 
     pub async fn set(&self, key: &str, value: JsValue, ttl_ms: Option<f64>) -> Result<(), JsValue> {
+        validate_key(key)?;
         if let Some(ms) = ttl_ms
             && (!ms.is_finite() || ms <= 0.0)
         {
@@ -396,6 +415,7 @@ impl IndexedDb {
     }
 
     pub async fn get(&self, key: &str) -> Result<JsValue, JsValue> {
+        validate_key(key)?;
         let full_key = format!("{}{}", self.state.lock().prefix, key);
         let db = self.db().await?;
         let Some(stored) = idb::raw_get(&db, &full_key).await.map_err(JsValue::from)? else {
@@ -415,6 +435,7 @@ impl IndexedDb {
     }
 
     pub async fn remove(&self, key: &str) -> Result<(), JsValue> {
+        validate_key(key)?;
         let full_key = format!("{}{}", self.state.lock().prefix, key);
         let db = self.db().await?;
         idb::raw_remove(&db, &[full_key])
@@ -510,10 +531,12 @@ impl IndexedDb {
     pub async fn mget(&self, keys: js_sys::Array) -> Result<JsValue, JsValue> {
         let result = js_sys::Object::new();
         for i in 0..keys.length() {
-            if let Some(key) = keys.get(i).as_string() {
-                let value = self.get(&key).await?;
-                js_sys::Reflect::set(&result, &JsValue::from_str(&key), &value)?;
-            }
+            let Some(key) = keys.get(i).as_string() else {
+                return Err(JsValue::from_str("mget keys must be strings"));
+            };
+            validate_key(&key)?;
+            let value = self.get(&key).await?;
+            js_sys::Reflect::set(&result, &JsValue::from_str(&key), &value)?;
         }
         Ok(result.into())
     }

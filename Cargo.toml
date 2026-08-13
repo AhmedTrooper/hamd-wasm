@@ -48,6 +48,7 @@ web-sys = { version = "0.3.104", features = [
     "EventTarget",
     "Location",
     "MessageEvent",
+    "StorageEvent",
     "HtmlDocument",
     "IdbDatabase",
     "IdbFactory",
