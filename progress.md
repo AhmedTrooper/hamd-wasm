@@ -27,6 +27,7 @@ All state wrapped in `Arc<Mutex<…>>` (parking_lot) for thread safety across We
 - [x] Bulk ops: `mset(entriesObj, ttlMs?)` and `mget(keysArray) -> object` on all types
 - [x] Quota recovery: `StorageError::QuotaExceeded` detected (web + IndexedDB backends);
       `set` evicts expired entries via `purgeExpired` and retries once before failing
+- [x] README with full usage examples, API reference, architecture, feature status
 - [x] All checks pass: `cargo check`, `cargo fmt`, `cargo clippy` (zero warnings, `-D warnings`)
 - [x] CI workflow: fmt, clippy, check, wasm-pack build on push/PR to main/dev
 - [x] Release workflow: validate → publish crates.io + npm → GitHub Release on `v*` tags
@@ -35,5 +36,4 @@ All state wrapped in `Arc<Mutex<…>>` (parking_lot) for thread safety across We
 
 - [ ] wasm-pack build + npm packaging
 - [ ] Integration tests (wasm-bindgen-test)
-- [ ] README with usage examples
 - [ ] Publish to crates.io and npm
