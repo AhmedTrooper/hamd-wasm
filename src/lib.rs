@@ -1,5 +1,6 @@
 mod cookie;
 mod crypto;
+mod envelope;
 mod idb;
 mod memory;
 mod ops;
@@ -60,15 +61,24 @@ macro_rules! impl_storage {
                 Ok(key_vec)
             }
 
-            pub fn set(&self, key: &str, value: JsValue) -> Result<(), JsValue> {
+            pub fn set(
+                &self,
+                key: &str,
+                value: JsValue,
+                ttl_ms: Option<f64>,
+            ) -> Result<(), JsValue> {
                 let mut guard = self.state.lock();
                 let full_key = format!("{}{}", guard.prefix, key);
                 let json: String = js_sys::JSON::stringify(&value)?.into();
+                let payload = match ttl_ms {
+                    Some(ms) => envelope::wrap(&json, ms),
+                    None => json,
+                };
 
                 let stored = match &guard.encryption_key {
-                    Some(ek) => crypto::encrypt(ek.bytes(), json.as_bytes())
+                    Some(ek) => crypto::encrypt(ek.bytes(), payload.as_bytes())
                         .map_err(|e| JsValue::from_str(&e))?,
-                    None => json,
+                    None => payload,
                 };
 
                 guard
@@ -78,7 +88,7 @@ macro_rules! impl_storage {
             }
 
             pub fn get(&self, key: &str) -> Result<JsValue, JsValue> {
-                let guard = self.state.lock();
+                let mut guard = self.state.lock();
                 let full_key = format!("{}{}", guard.prefix, key);
 
                 match guard
@@ -92,7 +102,17 @@ macro_rules! impl_storage {
                                 .map_err(|e| JsValue::from_str(&e))?,
                             None => raw,
                         };
-                        js_sys::JSON::parse(&json)
+                        let parsed = js_sys::JSON::parse(&json)?;
+                        match envelope::unwrap(parsed)? {
+                            envelope::Unwrapped::Value(value) => Ok(value),
+                            envelope::Unwrapped::Expired => {
+                                guard
+                                    .backend
+                                    .raw_remove(&full_key)
+                                    .map_err(|e| JsValue::from_str(&e))?;
+                                Ok(JsValue::NULL)
+                            }
+                        }
                     }
                     None => Ok(JsValue::NULL),
                 }
@@ -128,13 +148,7 @@ macro_rules! impl_storage {
             }
 
             pub fn has(&self, key: &str) -> Result<bool, JsValue> {
-                let guard = self.state.lock();
-                let full_key = format!("{}{}", guard.prefix, key);
-                guard
-                    .backend
-                    .raw_get(&full_key)
-                    .map(|v| v.is_some())
-                    .map_err(|e| JsValue::from_str(&e))
+                Ok(!self.get(key)?.is_null())
             }
 
             pub fn keys(&self) -> Result<JsValue, JsValue> {
@@ -165,6 +179,25 @@ macro_rules! impl_storage {
                     .filter(|k| k.starts_with(prefix))
                     .count();
                 Ok(count as u32)
+            }
+
+            #[wasm_bindgen(js_name = "purgeExpired")]
+            pub fn purge_expired(&self) -> Result<(), JsValue> {
+                let user_keys: Vec<String> = {
+                    let guard = self.state.lock();
+                    let prefix = guard.prefix.clone();
+                    guard
+                        .backend
+                        .raw_keys()
+                        .map_err(|e| JsValue::from_str(&e))?
+                        .into_iter()
+                        .filter_map(|k| k.strip_prefix(&prefix).map(String::from))
+                        .collect()
+                };
+                for k in user_keys {
+                    self.get(&k)?;
+                }
+                Ok(())
             }
         }
     };
@@ -262,10 +295,14 @@ impl IndexedDb {
         Ok(key_vec)
     }
 
-    pub async fn set(&self, key: &str, value: JsValue) -> Result<(), JsValue> {
+    pub async fn set(&self, key: &str, value: JsValue, ttl_ms: Option<f64>) -> Result<(), JsValue> {
         let full_key = format!("{}{}", self.state.lock().prefix, key);
         let json: String = js_sys::JSON::stringify(&value)?.into();
-        let stored = self.encrypt_value(&json)?;
+        let payload = match ttl_ms {
+            Some(ms) => envelope::wrap(&json, ms),
+            None => json,
+        };
+        let stored = self.encrypt_value(&payload)?;
         let db = self.db().await?;
         idb::raw_set(&db, &full_key, &stored)
             .await
@@ -282,7 +319,16 @@ impl IndexedDb {
             return Ok(JsValue::NULL);
         };
         let json = self.decrypt_value(&stored)?;
-        js_sys::JSON::parse(&json)
+        let parsed = js_sys::JSON::parse(&json)?;
+        match envelope::unwrap(parsed)? {
+            envelope::Unwrapped::Value(value) => Ok(value),
+            envelope::Unwrapped::Expired => {
+                idb::raw_remove(&db, &[full_key])
+                    .await
+                    .map_err(|e| JsValue::from_str(&e))?;
+                Ok(JsValue::NULL)
+            }
+        }
     }
 
     pub async fn remove(&self, key: &str) -> Result<(), JsValue> {
@@ -309,12 +355,7 @@ impl IndexedDb {
     }
 
     pub async fn has(&self, key: &str) -> Result<bool, JsValue> {
-        let full_key = format!("{}{}", self.state.lock().prefix, key);
-        let db = self.db().await?;
-        let found = idb::raw_get(&db, &full_key)
-            .await
-            .map_err(|e| JsValue::from_str(&e))?;
-        Ok(found.is_some())
+        Ok(!self.get(key).await?.is_null())
     }
 
     pub async fn keys(&self) -> Result<JsValue, JsValue> {
@@ -342,5 +383,22 @@ impl IndexedDb {
             .filter(|k| k.starts_with(&prefix))
             .count();
         Ok(count as u32)
+    }
+
+    #[wasm_bindgen(js_name = "purgeExpired")]
+    pub async fn purge_expired(&self) -> Result<(), JsValue> {
+        let prefix = self.state.lock().prefix.clone();
+        let db = self.db().await?;
+        let raw = idb::raw_keys(&db)
+            .await
+            .map_err(|e| JsValue::from_str(&e))?;
+        let user_keys: Vec<String> = raw
+            .into_iter()
+            .filter_map(|k| k.strip_prefix(&prefix).map(String::from))
+            .collect();
+        for k in user_keys {
+            self.get(&k).await?;
+        }
+        Ok(())
     }
 }

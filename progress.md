@@ -20,13 +20,14 @@ All state wrapped in `Arc<Mutex<…>>` (parking_lot) for thread safety across We
 - [x] `idb.rs` — async IndexedDB backend: lazy DB open (v1, `kv` store), IDBRequest→Promise
       with self-cleaning handlers, batch deletes in one transaction; no lock held across awaits
 - [x] `lib.rs` — `IndexedDb` type with async set/get/remove/clear/has/keys/length
+- [x] `envelope.rs` — TTL: `set(key, value, ttlMs?)` wraps payload in `{__val,__exp}` envelope;
+      `get`/`has` lazy-evict expired entries, `purgeExpired()` on all types
 - [x] All checks pass: `cargo check`, `cargo fmt`, `cargo clippy` (zero warnings, `-D warnings`)
 - [x] CI workflow: fmt, clippy, check, wasm-pack build on push/PR to main/dev
 - [x] Release workflow: validate → publish crates.io + npm → GitHub Release on `v*` tags
 
 ## TODO
 
-- [ ] TTL (time-to-live) support with auto-eviction on read
 - [ ] Cross-tab sync via BroadcastChannel API
 - [ ] Bulk operations: mget, mset
 - [ ] Quota exceeded error recovery with auto-evict of expired entries
