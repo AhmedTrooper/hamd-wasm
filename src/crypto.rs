@@ -43,7 +43,8 @@ pub(crate) fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<String, String
 
 pub(crate) fn decrypt(key: &[u8; 32], hex_data: &str) -> Result<String, String> {
     let data = hex::decode(hex_data).map_err(|e| format!("hex decode: {e}"))?;
-    if data.len() < 13 {
+    // 12-byte nonce + 16-byte GCM tag = 28 bytes minimum.
+    if data.len() < 28 {
         return Err("ciphertext too short".into());
     }
 
