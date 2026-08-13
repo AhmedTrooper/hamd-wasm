@@ -17,6 +17,8 @@ All state wrapped in `Arc<Mutex<…>>` (parking_lot) for thread safety across We
 - [x] `cookie.rs` — Cookie backend (HtmlDocument.cookie)
 - [x] `lib.rs` — `impl_storage!` macro generating Local, Session, Memory, Cookies types
 - [x] All checks pass: `cargo check`, `cargo fmt`, `cargo clippy` (zero warnings, `-D warnings`)
+- [x] CI workflow: fmt, clippy, check, wasm-pack build on push/PR to main/dev
+- [x] Release workflow: validate → publish crates.io + npm → GitHub Release on `v*` tags
 
 ## TODO
 
@@ -28,5 +30,4 @@ All state wrapped in `Arc<Mutex<…>>` (parking_lot) for thread safety across We
 - [ ] wasm-pack build + npm packaging
 - [ ] Integration tests (wasm-bindgen-test)
 - [ ] README with usage examples
-- [ ] CI pipeline (GitHub Actions)
 - [ ] Publish to crates.io and npm
