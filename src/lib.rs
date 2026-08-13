@@ -406,6 +406,7 @@ impl_storage!(
 
 struct IndexedDbInner {
     backend: idb::IdbBackend,
+    database_name: String,
     prefix: String,
     encryption_key: Option<EncryptionKey>,
     sync: sync::SyncState,
@@ -422,7 +423,8 @@ impl IndexedDb {
         if let Some(db) = self.state.lock().backend.cached_db() {
             return Ok(db);
         }
-        let db = idb::open_db().await.map_err(JsValue::from)?;
+        let database_name = self.state.lock().database_name.clone();
+        let db = idb::open_db(&database_name).await.map_err(JsValue::from)?;
         self.state.lock().backend.set_cached_db(db.clone());
         Ok(db)
     }
@@ -455,10 +457,11 @@ impl IndexedDb {
     // not cross-thread sharing, so the !Send JS handle types inside are fine.
     #[allow(clippy::arc_with_non_send_sync)]
     #[wasm_bindgen(constructor)]
-    pub fn new(prefix: Option<String>) -> Self {
+    pub fn new(prefix: Option<String>, database_name: Option<String>) -> Self {
         Self {
             state: Arc::new(Mutex::new(IndexedDbInner {
                 backend: idb::IdbBackend::new(),
+                database_name: database_name.unwrap_or_else(|| "hamd".into()),
                 prefix: prefix.unwrap_or_else(|| "hamd:".into()),
                 encryption_key: None,
                 sync: sync::SyncState::new("indexeddb"),

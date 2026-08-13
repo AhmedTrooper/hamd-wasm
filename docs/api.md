@@ -5,6 +5,7 @@ All `Local/Session/Memory/Cookies` sync; `IndexedDb` same names `Promise`.
 | Method | Returns | Notes |
 |---|---|---|
 | `new Type(prefix?)` | instance | default `hamd:` |
+| `new IndexedDb(prefix?, databaseName?)` | instance | defaults to database `hamd`; choose a name to isolate applications |
 | `set(k,v,ttl?)` | void/Promise | `JSON.stringify`, `ttlMs` `finite>0` else error |
 | `setBytes(k,Uint8Array,ttl?)` | void/Promise | `__bin` base64, `4.8M` guard → use IndexedDb |
 | `get(k)` | any\|null | lazy TTL evict |

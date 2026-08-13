@@ -7,7 +7,6 @@ use wasm_bindgen_futures::JsFuture;
 
 use crate::ops::StorageError;
 
-const DB_NAME: &str = "hamd";
 const DB_VERSION: u32 = 1;
 const STORE_NAME: &str = "kv";
 
@@ -29,14 +28,16 @@ impl IdbBackend {
     }
 }
 
-pub(crate) async fn open_db() -> Result<web_sys::IdbDatabase, String> {
+pub(crate) async fn open_db(database_name: &str) -> Result<web_sys::IdbDatabase, String> {
     let factory = web_sys::window()
         .ok_or_else(|| "no global window".to_string())?
         .indexed_db()
         .map_err(js_err)?
         .ok_or_else(|| "indexedDB unavailable".to_string())?;
 
-    let open_req = factory.open_with_u32(DB_NAME, DB_VERSION).map_err(js_err)?;
+    let open_req = factory
+        .open_with_u32(database_name, DB_VERSION)
+        .map_err(js_err)?;
 
     let upgrade = Closure::once(move |event: web_sys::Event| {
         let Some(target) = event.target() else {
