@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dark mode tint comparison · hamd-wasm</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: 0 0% 100%;
+        --fg: 240 10% 3.9%;
+        --muted: 240 4.8% 95.9%;
+        --muted-fg: 240 3.8% 46.1%;
+        --border: 240 5.9% 90%;
+        --primary: 240 5.9% 10%;
+        --primary-fg: 0 0% 98%;
+        --accent: 240 4.8% 95.9%;
+        --accent-fg: 240 5.9% 10%;
+        --destructive: 0 84.2% 60.2%;
+        --ring: 240 5% 64.9%;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Inter", system-ui, sans-serif;
+        font-size: 15px;
+        line-height: 1.65;
+        background: hsl(var(--bg));
+        color: hsl(var(--fg));
+        -webkit-font-smoothing: antialiased;
+      }
+      code {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.875em;
+        background: hsl(var(--muted));
+        padding: 1px 5px;
+        border-radius: 4px;
+        border: 1px solid hsl(var(--border));
+      }
+
+      .header {
+        padding: 32px 24px 16px;
+        border-bottom: 1px solid hsl(var(--border));
+      }
+      .header h1 {
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin: 0 0 6px;
+      }
+      .header p {
+        margin: 0;
+        color: hsl(var(--muted-fg));
+      }
+      .header a {
+        color: inherit;
+        text-decoration: underline;
+        text-decoration-color: hsl(var(--border));
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 16px;
+        padding: 24px;
+      }
+
+      .swatch {
+        border: 1px solid hsl(var(--border));
+        border-radius: 12px;
+        overflow: hidden;
+        background: hsl(var(--bg));
+      }
+
+      .swatch-head {
+        padding: 14px 16px;
+        border-bottom: 1px solid hsl(var(--border));
+        background: hsl(var(--muted));
+      }
+      .swatch-head h2 {
+        margin: 0 0 2px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .swatch-head p {
+        margin: 0;
+        font-size: 12px;
+        color: hsl(var(--muted-fg));
+      }
+      .swatch-head code {
+        font-size: 11px;
+      }
+
+      .swatch-body {
+        padding: 20px;
+      }
+
+      .swatch-body h3 {
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin: 0 0 8px;
+      }
+      .swatch-body p {
+        margin: 0 0 14px;
+        color: hsl(var(--muted-fg));
+      }
+
+      .sample {
+        background: hsl(var(--muted));
+        border: 1px solid hsl(var(--border));
+        border-radius: 8px;
+        padding: 12px 14px;
+        margin: 10px 0;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12.5px;
+        line-height: 1.6;
+        overflow-x: auto;
+        white-space: pre;
+      }
+
+      .card {
+        background: hsl(var(--bg));
+        border: 1px solid hsl(var(--border));
+        border-radius: 8px;
+        padding: 14px;
+        margin-top: 10px;
+      }
+      .card .title {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .card .desc {
+        font-size: 12.5px;
+        color: hsl(var(--muted-fg));
+      }
+
+      /* ===========================================================
+         VARIANT 1 — Warm Zinc (current) — neutral, soft slate
+         =========================================================== */
+      .v1 {
+        --bg: 220 14% 8%;
+        --fg: 210 20% 92%;
+        --muted: 220 12% 14%;
+        --muted-fg: 220 10% 65%;
+        --border: 220 12% 18%;
+        --primary: 210 20% 92%;
+        --primary-fg: 220 14% 10%;
+        --accent: 220 12% 16%;
+        --accent-fg: 210 20% 92%;
+        --destructive: 0 55% 42%;
+        --ring: 220 12% 35%;
+      }
+
+      /* ===========================================================
+         VARIANT 2 — Slate Blue — cool, like VS Code dark+
+         =========================================================== */
+      .v2 {
+        --bg: 222 22% 9%;
+        --fg: 215 25% 92%;
+        --muted: 220 18% 15%;
+        --muted-fg: 218 14% 68%;
+        --border: 220 16% 20%;
+        --primary: 215 25% 92%;
+        --primary-fg: 222 22% 9%;
+        --accent: 220 18% 18%;
+        --accent-fg: 215 25% 92%;
+        --destructive: 0 60% 45%;
+        --ring: 218 18% 40%;
+      }
+
+      /* ===========================================================
+         VARIANT 3 — Forest / Greenish — GitHub dark vibe, very restful
+         =========================================================== */
+      .v3 {
+        --bg: 150 10% 8%;
+        --fg: 140 12% 90%;
+        --muted: 150 8% 13%;
+        --muted-fg: 145 8% 62%;
+        --border: 150 8% 17%;
+        --primary: 140 12% 90%;
+        --primary-fg: 150 10% 8%;
+        --accent: 150 8% 16%;
+        --accent-fg: 140 12% 90%;
+        --destructive: 5 55% 45%;
+        --ring: 145 10% 35%;
+      }
+
+      /* ===========================================================
+         VARIANT 4 — Plum / Mauve — Linear-style, warm purple tint
+         =========================================================== */
+      .v4 {
+        --bg: 270 12% 9%;
+        --fg: 270 10% 91%;
+        --muted: 270 8% 14%;
+        --muted-fg: 270 8% 65%;
+        --border: 270 8% 19%;
+        --primary: 270 10% 91%;
+        --primary-fg: 270 12% 9%;
+        --accent: 270 8% 17%;
+        --accent-fg: 270 10% 91%;
+        --destructive: 0 55% 45%;
+        --ring: 270 10% 38%;
+      }
+
+      /* ===========================================================
+         VARIANT 5 — Pure Neutral (no hue) — shadcn default
+         =========================================================== */
+      .v5 {
+        --bg: 0 0% 9%;
+        --fg: 0 0% 95%;
+        --muted: 0 0% 14%;
+        --muted-fg: 0 0% 64%;
+        --border: 0 0% 18%;
+        --primary: 0 0% 95%;
+        --primary-fg: 0 0% 9%;
+        --accent: 0 0% 16%;
+        --accent-fg: 0 0% 95%;
+        --destructive: 0 60% 45%;
+        --ring: 0 0% 38%;
+      }
+
+      /* ===========================================================
+         VARIANT 6 — Midnight Blue — deep, easy on eyes
+         =========================================================== */
+      .v6 {
+        --bg: 230 35% 9%;
+        --fg: 220 30% 93%;
+        --muted: 230 25% 14%;
+        --muted-fg: 225 18% 68%;
+        --border: 230 22% 20%;
+        --primary: 220 30% 93%;
+        --primary-fg: 230 35% 9%;
+        --accent: 230 25% 18%;
+        --accent-fg: 220 30% 93%;
+        --destructive: 0 55% 45%;
+        --ring: 225 22% 40%;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="header">
+      <h1>Dark mode tint comparison</h1>
+      <p>
+        Same docs surface, six different background tints. Pick what feels
+        best. The selected one will become the default dark theme.
+      </p>
+    </header>
+
+    <div class="grid">
+      <!-- 1 — Warm Zinc -->
+      <div class="swatch v1">
+        <div class="swatch-head">
+          <h2>1. Warm Zinc <code>220 14% 8%</code></h2>
+          <p>Neutral, soft slate. Current default.</p>
+        </div>
+        <div class="swatch-body">
+          <h3>hamd-wasm docs</h3>
+          <p>
+            One API for every browser store. <code>localStorage</code>,{" "}
+            <code>IndexedDB</code>, and four more, behind one typed Rust/WASM
+            surface.
+          </p>
+          <div class="sample">
+            const store = new Local("app:");
+            store.set("user", { id: 42 });</div
+          >
+          <div class="card">
+            <div class="title">AES-256-GCM</div>
+            <div class="desc">
+              Per-instance 32-byte key. Encrypted at rest in DevTools.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2 — Slate Blue -->
+      <div class="swatch v2">
+        <div class="swatch-head">
+          <h2>2. Slate Blue <code>222 22% 9%</code></h2>
+          <p>Cool, VS Code Dark+ style. Familiar to devs.</p>
+        </div>
+        <div class="swatch-body">
+          <h3>hamd-wasm docs</h3>
+          <p>
+            One API for every browser store. <code>localStorage</code>,{" "}
+            <code>IndexedDB</code>, and four more, behind one typed Rust/WASM
+            surface.
+          </p>
+          <div class="sample">
+            const store = new Local("app:");
+            store.set("user", { id: 42 });</div
+          >
+          <div class="card">
+            <div class="title">AES-256-GCM</div>
+            <div class="desc">
+              Per-instance 32-byte key. Encrypted at rest in DevTools.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 — Forest -->
+      <div class="swatch v3">
+        <div class="swatch-head">
+          <h2>3. Forest <code>150 10% 8%</code></h2>
+          <p>Subtle green tint. GitHub Dark vibe, very restful.</p>
+        </div>
+        <div class="swatch-body">
+          <h3>hamd-wasm docs</h3>
+          <p>
+            One API for every browser store. <code>localStorage</code>,{" "}
+            <code>IndexedDB</code>, and four more, behind one typed Rust/WASM
+            surface.
+          </p>
+          <div class="sample">
+            const store = new Local("app:");
+            store.set("user", { id: 42 });</div
+          >
+          <div class="card">
+            <div class="title">AES-256-GCM</div>
+            <div class="desc">
+              Per-instance 32-byte key. Encrypted at rest in DevTools.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 — Plum -->
+      <div class="swatch v4">
+        <div class="swatch-head">
+          <h2>4. Plum <code>270 12% 9%</code></h2>
+          <p>Warm purple tint. Linear / Stripe style.</p>
+        </div>
+        <div class="swatch-body">
+          <h3>hamd-wasm docs</h3>
+          <p>
+            One API for every browser store. <code>localStorage</code>,{" "}
+            <code>IndexedDB</code>, and four more, behind one typed Rust/WASM
+            surface.
+          </p>
+          <div class="sample">
+            const store = new Local("app:");
+            store.set("user", { id: 42 });</div
+          >
+          <div class="card">
+            <div class="title">AES-256-GCM</div>
+            <div class="desc">
+              Per-instance 32-byte key. Encrypted at rest in DevTools.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5 — Pure Neutral -->
+      <div class="swatch v5">
+        <div class="swatch-head">
+          <h2>5. Pure Neutral <code>0 0% 9%</code></h2>
+          <p>No hue at all. shadcn default.</p>
+        </div>
+        <div class="swatch-body">
+          <h3>hamd-wasm docs</h3>
+          <p>
+            One API for every browser store. <code>localStorage</code>,{" "}
+            <code>IndexedDB</code>, and four more, behind one typed Rust/WASM
+            surface.
+          </p>
+          <div class="sample">
+            const store = new Local("app:");
+            store.set("user", { id: 42 });</div
+          >
+          <div class="card">
+            <div class="title">AES-256-GCM</div>
+            <div class="desc">
+              Per-instance 32-byte key. Encrypted at rest in DevTools.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6 — Midnight Blue -->
+      <div class="swatch v6">
+        <div class="swatch-head">
+          <h2>6. Midnight Blue <code>230 35% 9%</code></h2>
+          <p>Deep navy. Strong blue cast, easy on eyes.</p>
+        </div>
+        <div class="swatch-body">
+          <h3>hamd-wasm docs</h3>
+          <p>
+            One API for every browser store. <code>localStorage</code>,{" "}
+            <code>IndexedDB</code>, and four more, behind one typed Rust/WASM
+            surface.
+          </p>
+          <div class="sample">
+            const store = new Local("app:");
+            store.set("user", { id: 42 });</div
+          >
+          <div class="card">
+            <div class="title">AES-256-GCM</div>
+            <div class="desc">
+              Per-instance 32-byte key. Encrypted at rest in DevTools.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
