@@ -76,7 +76,7 @@ macro_rules! impl_storage {
 
             #[wasm_bindgen(js_name = "generateKey")]
             pub fn generate_key(&self) -> Result<Vec<u8>, JsValue> {
-                let key_vec = crypto::generate_key();
+                let key_vec = crypto::generate_key().map_err(JsValue::from)?;
                 let mut bytes = [0u8; 32];
                 bytes.copy_from_slice(&key_vec);
                 self.state.lock().encryption_key = Some(EncryptionKey::new(bytes));
@@ -452,7 +452,7 @@ impl IndexedDb {
 
     #[wasm_bindgen(js_name = "generateKey")]
     pub fn generate_key(&self) -> Result<Vec<u8>, JsValue> {
-        let key_vec = crypto::generate_key();
+        let key_vec = crypto::generate_key().map_err(JsValue::from)?;
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(&key_vec);
         self.state.lock().encryption_key = Some(EncryptionKey::new(bytes));

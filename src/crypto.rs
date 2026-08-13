@@ -19,10 +19,10 @@ impl EncryptionKey {
     }
 }
 
-pub(crate) fn generate_key() -> Vec<u8> {
+pub(crate) fn generate_key() -> Result<Vec<u8>, String> {
     let mut key = [0u8; 32];
-    getrandom::fill(&mut key).expect("getrandom failed");
-    key.to_vec()
+    getrandom::fill(&mut key).map_err(|e| format!("random key generation failed: {e}"))?;
+    Ok(key.to_vec())
 }
 
 pub(crate) fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<String, String> {
