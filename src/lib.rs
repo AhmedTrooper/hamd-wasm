@@ -100,7 +100,7 @@ macro_rules! impl_storage {
                     let full_key = format!("{}{}", guard.prefix, key);
                     let json: String = js_sys::JSON::stringify(&value)?.into();
                     let payload = match ttl_ms {
-                        Some(ms) => envelope::wrap(&json, ms),
+                        Some(ms) => envelope::wrap(&json, ms)?,
                         None => json,
                     };
 
@@ -301,7 +301,7 @@ macro_rules! impl_storage {
                     let mut guard = self.state.lock();
                     let full_key = format!("{}{}", guard.prefix, key);
                     let payload = match ttl_ms {
-                        Some(ms) => envelope::wrap(&json, ms),
+                        Some(ms) => envelope::wrap(&json, ms)?,
                         None => json,
                     };
                     let stored = match &guard.encryption_key {
@@ -469,7 +469,7 @@ impl IndexedDb {
         let full_key = format!("{}{}", self.state.lock().prefix, key);
         let json: String = js_sys::JSON::stringify(&value)?.into();
         let payload = match ttl_ms {
-            Some(ms) => envelope::wrap(&json, ms),
+            Some(ms) => envelope::wrap(&json, ms)?,
             None => json,
         };
         let stored = self.encrypt_value(&payload)?;
@@ -636,7 +636,7 @@ impl IndexedDb {
         let json = format!("{{\"__bin\":true,\"data\":\"{b64}\"}}");
         let full_key = format!("{}{}", self.state.lock().prefix, key);
         let payload = match ttl_ms {
-            Some(ms) => envelope::wrap(&json, ms),
+            Some(ms) => envelope::wrap(&json, ms)?,
             None => json,
         };
         let stored = self.encrypt_value(&payload)?;

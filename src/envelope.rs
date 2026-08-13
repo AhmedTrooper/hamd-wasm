@@ -5,20 +5,19 @@ pub(crate) enum Unwrapped {
     Expired,
 }
 
-pub(crate) fn wrap(json: &str, ttl_ms: f64) -> String {
+pub(crate) fn wrap(json: &str, ttl_ms: f64) -> Result<String, JsValue> {
     let expires_at = js_sys::Date::now() + ttl_ms;
     // Build envelope via JS object to avoid string interpolation fragility
     // and to correctly handle any JSON value (including primitives).
-    let parsed = js_sys::JSON::parse(json).unwrap_or(JsValue::UNDEFINED);
+    let parsed = js_sys::JSON::parse(json)?;
     let obj = js_sys::Object::new();
-    js_sys::Reflect::set(&obj, &JsValue::from_str("__val"), &parsed).unwrap();
+    js_sys::Reflect::set(&obj, &JsValue::from_str("__val"), &parsed)?;
     js_sys::Reflect::set(
         &obj,
         &JsValue::from_str("__exp"),
         &JsValue::from_f64(expires_at),
-    )
-    .unwrap();
-    js_sys::JSON::stringify(&obj).unwrap().into()
+    )?;
+    Ok(js_sys::JSON::stringify(&obj)?.into())
 }
 
 pub(crate) fn unwrap(parsed: JsValue) -> Result<Unwrapped, JsValue> {
