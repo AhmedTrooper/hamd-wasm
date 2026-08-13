@@ -11,7 +11,7 @@ categories = ["wasm", "web-programming"]
 authors = ["Md. Ramjan Miah <ramjan@example.com>"]
 homepage = "https://github.com/AhmedTrooper/hamd-wasm#readme"
 documentation = "https://docs.rs/hamd-wasm"
-exclude = ["pkg/", "target/", ".github/"]
+exclude = ["pkg/", "target/", ".github/", "web/"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
