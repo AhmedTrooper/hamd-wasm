@@ -8,6 +8,10 @@ repository = "https://github.com/AhmedTrooper/hamd-wasm"
 readme = "README.md"
 keywords = ["storage", "localstorage", "indexeddb", "encryption", "wasm"]
 categories = ["wasm", "web-programming"]
+authors = ["Md. Ramjan Miah <ramjan@example.com>"]
+homepage = "https://github.com/AhmedTrooper/hamd-wasm#readme"
+documentation = "https://docs.rs/hamd-wasm"
+exclude = ["pkg/", "target/", ".github/"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
