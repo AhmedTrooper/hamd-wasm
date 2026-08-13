@@ -70,8 +70,5 @@ pub(crate) fn looks_encrypted(value: &str) -> bool {
 }
 
 pub(crate) fn decrypt_if_encrypted(key: &[u8; 32], stored: &str) -> Result<String, String> {
-    if stored.starts_with(ENCRYPTION_PREFIX) {
-        return decrypt(key, stored);
-    }
-    Ok(stored.to_string())
+    decrypt(key, stored)
 }

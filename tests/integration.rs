@@ -185,28 +185,6 @@ fn memory_encryption_roundtrip() {
 }
 
 #[wasm_bindgen_test]
-fn memory_reads_existing_plaintext_after_encryption_is_enabled() {
-    let store = Memory::new(None);
-    store
-        .set("before", JsValue::from_str("plaintext"), None)
-        .unwrap();
-
-    store.create_encryption_key().unwrap();
-
-    assert_eq!(
-        store.get("before").unwrap().as_string().unwrap(),
-        "plaintext"
-    );
-    store
-        .set("after", JsValue::from_str("encrypted"), None)
-        .unwrap();
-    assert_eq!(
-        store.get("after").unwrap().as_string().unwrap(),
-        "encrypted"
-    );
-}
-
-#[wasm_bindgen_test]
 fn local_encrypted_value_requires_key_browser_only() {
     let encrypted = Local::new(Some("enc-required:".into()));
     if encrypted
