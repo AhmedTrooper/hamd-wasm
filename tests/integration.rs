@@ -261,6 +261,41 @@ async fn indexeddb_roundtrip_browser_only() {
     db.remove("probe").await.unwrap();
 }
 
+#[wasm_bindgen_test]
+async fn indexeddb_encryption_roundtrip_browser_only() {
+    let db = IndexedDb::with_database(
+        Some("encrypted-test:".into()),
+        Some("hamd-encrypted-test".into()),
+    );
+    if db
+        .set("probe", JsValue::from_str("ok"), None)
+        .await
+        .is_err()
+    {
+        return;
+    }
+    db.remove("probe").await.unwrap();
+
+    let key = db.create_encryption_key().unwrap();
+    db.set("secret", JsValue::from_str("value"), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        db.get("secret").await.unwrap().as_string().unwrap(),
+        "value"
+    );
+    let reopened = IndexedDb::with_database(
+        Some("encrypted-test:".into()),
+        Some("hamd-encrypted-test".into()),
+    );
+    reopened.enable_encryption(&key).unwrap();
+    assert_eq!(
+        reopened.get("secret").await.unwrap().as_string().unwrap(),
+        "value"
+    );
+    db.remove("secret").await.unwrap();
+}
+
 async fn sleep_ms(ms: i32) {
     let promise = js_sys::Promise::new(&mut |resolve, _| {
         web_sys::window()
