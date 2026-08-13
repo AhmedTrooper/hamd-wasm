@@ -25,14 +25,21 @@ impl CookieBackend {
             .split(';')
             .filter_map(|pair| {
                 let pair = pair.trim();
-                let mut parts = pair.splitn(2, '=');
-                let key = parts.next()?.to_string();
-                let val = parts.next().unwrap_or("").to_string();
-                if key.is_empty() {
-                    None
-                } else {
-                    Some((key, val))
+                if pair.is_empty() {
+                    return None;
                 }
+                let mut parts = pair.splitn(2, '=');
+                let raw_key = parts.next()?.trim();
+                let raw_val = parts.next().unwrap_or("").trim();
+                if raw_key.is_empty() {
+                    return None;
+                }
+                // Keys and values are stored encoded; decode value on read.
+                let val = js_sys::decode_uri_component(raw_val)
+                    .ok()
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| raw_val.to_string());
+                Some((raw_key.to_string(), val))
             })
             .collect())
     }
@@ -41,7 +48,12 @@ impl CookieBackend {
 impl StorageOps for CookieBackend {
     fn raw_set(&mut self, key: &str, value: &str) -> Result<(), StorageError> {
         let doc = Self::html_document()?;
-        let cookie = format!("{}={}; path=/; max-age=31536000; SameSite=Lax", key, value);
+        let encoded = js_sys::encode_uri_component(value);
+        let encoded_str: String = encoded.as_string().unwrap_or_else(|| value.to_string());
+        let cookie = format!(
+            "{}={}; path=/; max-age=31536000; SameSite=Lax",
+            key, encoded_str
+        );
         doc.set_cookie(&cookie)
             .map_err(|_| StorageError::Other("cookie write denied".into()))
     }
