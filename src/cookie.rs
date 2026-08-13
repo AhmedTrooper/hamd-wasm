@@ -34,12 +34,15 @@ impl CookieBackend {
                 if raw_key.is_empty() {
                     return None;
                 }
-                // Keys and values are stored encoded; decode value on read.
+                let key = js_sys::decode_uri_component(raw_key)
+                    .ok()
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| raw_key.to_string());
                 let val = js_sys::decode_uri_component(raw_val)
                     .ok()
                     .and_then(|v| v.as_string())
                     .unwrap_or_else(|| raw_val.to_string());
-                Some((raw_key.to_string(), val))
+                Some((key, val))
             })
             .collect())
     }
@@ -48,6 +51,9 @@ impl CookieBackend {
 impl StorageOps for CookieBackend {
     fn raw_set(&mut self, key: &str, value: &str) -> Result<(), StorageError> {
         let doc = Self::html_document()?;
+        let encoded_key = js_sys::encode_uri_component(key)
+            .as_string()
+            .unwrap_or_else(|| key.to_string());
         let encoded = js_sys::encode_uri_component(value);
         let encoded_str: String = encoded.as_string().unwrap_or_else(|| value.to_string());
         let secure = web_sys::window()
@@ -55,7 +61,7 @@ impl StorageOps for CookieBackend {
             .is_some_and(|p| p == "https:");
         let mut cookie = format!(
             "{}={}; path=/; max-age=31536000; SameSite=Lax",
-            key, encoded_str
+            encoded_key, encoded_str
         );
         if secure {
             cookie.push_str("; Secure");
@@ -76,7 +82,10 @@ impl StorageOps for CookieBackend {
 
     fn raw_remove(&mut self, key: &str) -> Result<(), StorageError> {
         let doc = Self::html_document()?;
-        let cookie = format!("{}=; path=/; max-age=0", key);
+        let encoded_key = js_sys::encode_uri_component(key)
+            .as_string()
+            .unwrap_or_else(|| key.to_string());
+        let cookie = format!("{}=; path=/; max-age=0", encoded_key);
         doc.set_cookie(&cookie)
             .map_err(|_| StorageError::Other("cookie delete denied".into()))
     }

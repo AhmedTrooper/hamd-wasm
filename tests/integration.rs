@@ -334,6 +334,24 @@ fn cookies_roundtrip_browser_only() {
 }
 
 #[wasm_bindgen_test]
+fn cookies_support_encoded_prefixes_and_keys_browser_only() {
+    let Ok(store) = std::panic::catch_unwind(|| Cookies::new(Some("app name/☃:".into()))) else {
+        return;
+    };
+    if store
+        .set("user=id value", JsValue::from_str("ok"), None)
+        .is_err()
+    {
+        return;
+    }
+    assert_eq!(
+        store.get("user=id value").unwrap().as_string().unwrap(),
+        "ok"
+    );
+    store.remove("user=id value").unwrap();
+}
+
+#[wasm_bindgen_test]
 async fn memory_sync_notifies_subscriber() {
     let a = Memory::new(Some("sync-test:".into()));
     let b = Memory::new(Some("sync-test:".into()));
