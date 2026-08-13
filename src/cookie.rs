@@ -47,10 +47,6 @@ impl CookieBackend {
 
 impl StorageOps for CookieBackend {
     fn raw_set(&mut self, key: &str, value: &str) -> Result<(), StorageError> {
-        // 4KB per cookie limit; fail early with quota error to trigger retry path.
-        if key.len() + value.len() > 3900 {
-            return Err(StorageError::QuotaExceeded);
-        }
         let doc = Self::html_document()?;
         let encoded = js_sys::encode_uri_component(value);
         let encoded_str: String = encoded.as_string().unwrap_or_else(|| value.to_string());
@@ -63,6 +59,11 @@ impl StorageOps for CookieBackend {
         );
         if secure {
             cookie.push_str("; Secure");
+        }
+        // Browsers enforce the cookie limit on the serialized cookie, after encoding and
+        // including attributes. Keep a small margin below the usual 4096-byte limit.
+        if cookie.len() > 4_000 {
+            return Err(StorageError::QuotaExceeded);
         }
         doc.set_cookie(&cookie)
             .map_err(|_| StorageError::Other("cookie write denied".into()))
