@@ -95,12 +95,19 @@ pub(crate) async fn raw_remove(
     if keys.is_empty() {
         return Ok(());
     }
-    let store = store_with_mode(db, web_sys::IdbTransactionMode::Readwrite)?;
+    // Queue all deletes on a single transaction before awaiting any,
+    // keeping the transaction alive across the batch.
+    let tx = db
+        .transaction_with_str_and_mode(STORE_NAME, web_sys::IdbTransactionMode::Readwrite)
+        .map_err(idb_err)?;
+    let store = tx.object_store(STORE_NAME).map_err(idb_err)?;
+    let mut futures = Vec::with_capacity(keys.len());
     for key in keys {
         let req = store.delete(&JsValue::from_str(key)).map_err(idb_err)?;
-        JsFuture::from(request_promise(&req))
-            .await
-            .map_err(idb_err)?;
+        futures.push(JsFuture::from(request_promise(&req)));
+    }
+    for fut in futures {
+        fut.await.map_err(idb_err)?;
     }
     Ok(())
 }
