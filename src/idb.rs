@@ -59,7 +59,16 @@ pub(crate) async fn open_db(database_name: &str) -> Result<web_sys::IdbDatabase,
     let result = JsFuture::from(request_promise(&open_req)).await;
     open_req.set_onupgradeneeded(None);
     drop(upgrade);
-    Ok(result.map_err(js_err)?.unchecked_into())
+    let db: web_sys::IdbDatabase = result.map_err(js_err)?.unchecked_into();
+    let on_version_change = Closure::wrap(Box::new({
+        let db = db.clone();
+        move |_event: web_sys::Event| {
+            db.close();
+        }
+    }) as Box<dyn FnMut(web_sys::Event)>);
+    db.set_onversionchange(Some(on_version_change.as_ref().unchecked_ref()));
+    on_version_change.forget();
+    Ok(db)
 }
 
 pub(crate) async fn raw_set(
