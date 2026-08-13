@@ -1,6 +1,8 @@
 # Binary — Uint8Array
 
-String storages (`Local/Session`) keep `String` only → binary → `base64` `{"__bin":true,"data":"<b64>"}` → same `envelope/encrypt`; guard `>4_800_000→use IndexedDb`.
+String storages (`Local/Session`) keep `String` only → binary → versioned base64
+`{"__hamd":"hamd:bin:v1","data":"<b64>"}` → same `envelope/encrypt`; guard
+`>4_800_000→use IndexedDb`.
 
 ```ts
 s.setBytes('avatar', new Uint8Array([0,255,42]));

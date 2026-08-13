@@ -130,7 +130,7 @@ await db.setBytes('file', bytes, 60_000); // async, disk-backed, same envelope
 await db.getBytes('file');                // → Uint8Array | undefined
 ```
 
-* `bytes: Uint8Array` (`&[u8]` in Rust) — base64 envelope `__bin`; string backends guard `b64_len>4_800_000 → bytes too large for string storage, use IndexedDb` (covers `Local/Session` 5MB → ~3.6MB binary). `Cookies` also hits `3900` guard first.
+* `bytes: Uint8Array` (`&[u8]` in Rust) — versioned base64 envelope `hamd:bin:v1`; string backends guard `b64_len>4_800_000 → bytes too large for string storage, use IndexedDb` (covers `Local/Session` 5MB → ~3.6MB binary). `Cookies` also hits its serialized-size guard first.
 * `getBytes` returns `undefined` if missing/expired; throws `value is not binary data` if you call it on a `set`-saved JSON key
 
 ### `remove(key)` / `clear()` — delete

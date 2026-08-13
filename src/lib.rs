@@ -18,6 +18,8 @@ use base64::Engine as _;
 use crate::crypto::EncryptionKey;
 use crate::ops::{StorageError, StorageOps};
 
+const BINARY_MARKER: &str = "hamd:bin:v1";
+
 fn validate_key(key: &str) -> Result<(), JsValue> {
     if key.is_empty() {
         return Err(JsValue::from_str("key must be non-empty"));
@@ -334,7 +336,7 @@ macro_rules! impl_storage {
                     ));
                 }
                 let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
-                let json = format!("{{\"__bin\":true,\"data\":\"{b64}\"}}");
+                let json = format!("{{\"__hamd\":\"{BINARY_MARKER}\",\"data\":\"{b64}\"}}");
                 let (full_key, stored) = {
                     let mut guard = self.state.lock();
                     let full_key = format!("{}{}", guard.prefix, key);
@@ -375,10 +377,8 @@ macro_rules! impl_storage {
                 if val.is_null() || val.is_undefined() {
                     return Ok(None);
                 }
-                let is_bin = js_sys::Reflect::get(&val, &JsValue::from_str("__bin"))?
-                    .as_bool()
-                    .unwrap_or(false);
-                if !is_bin {
+                let marker = js_sys::Reflect::get(&val, &JsValue::from_str("__hamd"))?;
+                if marker.as_string().as_deref() != Some(BINARY_MARKER) {
                     return Err(JsValue::from_str("value is not binary data"));
                 }
                 let data = js_sys::Reflect::get(&val, &JsValue::from_str("data"))?
@@ -738,7 +738,7 @@ impl IndexedDb {
             return Err(JsValue::from_str("ttlMs must be a positive finite number"));
         }
         let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-        let json = format!("{{\"__bin\":true,\"data\":\"{b64}\"}}");
+        let json = format!("{{\"__hamd\":\"{BINARY_MARKER}\",\"data\":\"{b64}\"}}");
         let full_key = format!("{}{}", self.state.lock().prefix, key);
         let payload = match ttl_ms {
             Some(ms) => envelope::wrap(&json, ms)?,
@@ -770,10 +770,8 @@ impl IndexedDb {
         if val.is_null() || val.is_undefined() {
             return Ok(None);
         }
-        let is_bin = js_sys::Reflect::get(&val, &JsValue::from_str("__bin"))?
-            .as_bool()
-            .unwrap_or(false);
-        if !is_bin {
+        let marker = js_sys::Reflect::get(&val, &JsValue::from_str("__hamd"))?;
+        if marker.as_string().as_deref() != Some(BINARY_MARKER) {
             return Err(JsValue::from_str("value is not binary data"));
         }
         let data = js_sys::Reflect::get(&val, &JsValue::from_str("data"))?

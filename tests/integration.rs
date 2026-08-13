@@ -472,6 +472,21 @@ fn memory_bytes_roundtrip() {
 }
 
 #[wasm_bindgen_test]
+fn memory_get_bytes_rejects_similar_user_objects() {
+    let store = Memory::new(None);
+    let object = js_sys::Object::new();
+    js_sys::Reflect::set(&object, &JsValue::from_str("__bin"), &JsValue::TRUE).unwrap();
+    js_sys::Reflect::set(
+        &object,
+        &JsValue::from_str("data"),
+        &JsValue::from_str("AQID"),
+    )
+    .unwrap();
+    store.set("object", object.into(), None).unwrap();
+    assert!(store.get_bytes("object").is_err());
+}
+
+#[wasm_bindgen_test]
 fn memory_bytes_encrypted_roundtrip() {
     let store = Memory::new(None);
     let key = store.create_encryption_key().unwrap();
