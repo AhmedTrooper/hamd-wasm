@@ -106,7 +106,7 @@ store.set('otp', '123456', 60_000); // TTL 60s → envelope {__val, __exp: Date.
 * `key: string` — must satisfy **validation** (applies to every `key` param): non-empty, `≤256` bytes, no `\0` `\n` `\r` → else `key must be non-empty` / `key too long: max 256 bytes` / `key contains invalid control characters`
 * `value: any` — `JSON.stringify`'d; primitives, objects, arrays all OK
 * `ttlMs?: number|null` — if given must be `finite && >0` else `ttlMs must be a positive finite number`
-* Storage is `hex(nonce||ciphertext)` if encryption enabled, else JSON or TTL-envelope JSON
+* Storage is `hamd:enc:v1:` + `hex(nonce||ciphertext)` if encryption is enabled, else JSON or TTL-envelope JSON
 
 ### `get(key)` — load JSON
 
@@ -179,7 +179,7 @@ const key = s.generateKey(); // Uint8Array(32), also enables encryption for this
 // bring your own
 s.enableEncryption(my32Bytes); // throws "key must be exactly 32 bytes" if !=32
 
-s.set('secret', { ssn: '000' });  // stored as hex(nonce 12B || ciphertext+tag 16B)
+s.set('secret', { ssn: '000' });  // stored as versioned AES-GCM payload
 s.get('secret'); // wrong key → "decryption failed: wrong key or corrupted data" / "hex decode: …"/"utf-8 decode: …"
 s.setBytes('enc', new Uint8Array([1,2,3])); // also encrypted (encrypts the __bin JSON)
 

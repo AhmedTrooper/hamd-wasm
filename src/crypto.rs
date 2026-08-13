@@ -4,6 +4,8 @@ use aes_gcm::{
 };
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
+const ENCRYPTION_PREFIX: &str = "hamd:enc:v1:";
+
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub(crate) struct EncryptionKey {
     key_bytes: [u8; 32],
@@ -38,10 +40,12 @@ pub(crate) fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<String, String
 
     let mut combined = nonce_bytes.to_vec();
     combined.extend_from_slice(&ciphertext);
-    Ok(hex::encode(combined))
+    Ok(format!("{ENCRYPTION_PREFIX}{}", hex::encode(combined)))
 }
 
-pub(crate) fn decrypt(key: &[u8; 32], hex_data: &str) -> Result<String, String> {
+pub(crate) fn decrypt(key: &[u8; 32], stored: &str) -> Result<String, String> {
+    // Unprefixed hexadecimal ciphertext was produced before the payload format was versioned.
+    let hex_data = stored.strip_prefix(ENCRYPTION_PREFIX).unwrap_or(stored);
     let data = hex::decode(hex_data).map_err(|e| format!("hex decode: {e}"))?;
     // 12-byte nonce + 16-byte GCM tag = 28 bytes minimum.
     if data.len() < 28 {
@@ -61,7 +65,8 @@ pub(crate) fn decrypt(key: &[u8; 32], hex_data: &str) -> Result<String, String> 
 }
 
 pub(crate) fn looks_encrypted(value: &str) -> bool {
-    value.len() >= 56
-        && value.len().is_multiple_of(2)
-        && value.as_bytes().iter().all(u8::is_ascii_hexdigit)
+    value.starts_with(ENCRYPTION_PREFIX)
+        || (value.len() >= 56
+            && value.len().is_multiple_of(2)
+            && value.as_bytes().iter().all(u8::is_ascii_hexdigit))
 }

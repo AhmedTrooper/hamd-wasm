@@ -8,7 +8,7 @@ If the key is lost or replaced, existing encrypted values cannot be decrypted.
 ```ts
 const s = new Local();
 const key = s.createEncryptionKey(); // 32B, enables; persist this exact key
-s.set('secret', { ssn: '000' }); // hex(nonce||ciphertext)
+s.set('secret', { ssn: '000' }); // versioned AES-GCM payload
 s.get('secret'); // decrypt, wrong key → "decryption failed: wrong key or corrupted data"
 s.setBytes('bin', new Uint8Array([1,2,3])); // also encrypted
 ```
@@ -19,3 +19,6 @@ server-side encryption or a key derived from user-provided secret material.
 
 `generateKey()` remains as a compatibility alias, but do not call either method on
 every page load: that would create a different key and make old values unreadable.
+
+Encrypted records use the versioned `hamd:enc:v1:` format. Hamd continues to
+read legacy unprefixed ciphertext written by earlier releases.
