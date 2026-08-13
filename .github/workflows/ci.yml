@@ -37,3 +37,6 @@ jobs:
 
       - name: wasm-pack build
         run: wasm-pack build --target bundler --release
+
+      - name: wasm-pack test
+        run: wasm-pack test --chrome --headless
