@@ -20,5 +20,4 @@ server-side encryption or a key derived from user-provided secret material.
 Do not call `createEncryptionKey()` on every page load: that would create a
 different key and make old values unreadable.
 
-Encrypted records use the versioned `hamd:enc:v1:` format. Hamd continues to
-read legacy unprefixed ciphertext written by earlier releases.
+Encrypted records use the explicit versioned `hamd:enc:v1:` format.

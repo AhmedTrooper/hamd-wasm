@@ -144,9 +144,7 @@ macro_rules! impl_storage {
                             Some(ek) => crypto::decrypt_if_encrypted(ek.bytes(), &raw)
                                 .map_err(JsValue::from)?,
                             None => {
-                                if crypto::looks_encrypted(&raw)
-                                    && js_sys::JSON::parse(&raw).is_err()
-                                {
+                                if crypto::looks_encrypted(&raw) {
                                     return Err(JsValue::from_str(
                                         "encryption key required to read encrypted data",
                                     ));
@@ -446,7 +444,7 @@ impl IndexedDb {
         match &self.state.lock().encryption_key {
             Some(ek) => crypto::decrypt_if_encrypted(ek.bytes(), stored).map_err(JsValue::from),
             None => {
-                if crypto::looks_encrypted(stored) && js_sys::JSON::parse(stored).is_err() {
+                if crypto::looks_encrypted(stored) {
                     return Err(JsValue::from_str(
                         "encryption key required to read encrypted data",
                     ));

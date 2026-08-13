@@ -44,8 +44,9 @@ pub(crate) fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<String, String
 }
 
 pub(crate) fn decrypt(key: &[u8; 32], stored: &str) -> Result<String, String> {
-    // Unprefixed hexadecimal ciphertext was produced before the payload format was versioned.
-    let hex_data = stored.strip_prefix(ENCRYPTION_PREFIX).unwrap_or(stored);
+    let hex_data = stored
+        .strip_prefix(ENCRYPTION_PREFIX)
+        .ok_or_else(|| "unsupported encrypted payload format".to_string())?;
     let data = hex::decode(hex_data).map_err(|e| format!("hex decode: {e}"))?;
     // 12-byte nonce + 16-byte GCM tag = 28 bytes minimum.
     if data.len() < 28 {
@@ -66,16 +67,10 @@ pub(crate) fn decrypt(key: &[u8; 32], stored: &str) -> Result<String, String> {
 
 pub(crate) fn looks_encrypted(value: &str) -> bool {
     value.starts_with(ENCRYPTION_PREFIX)
-        || (value.len() >= 56
-            && value.len().is_multiple_of(2)
-            && value.as_bytes().iter().all(u8::is_ascii_hexdigit))
 }
 
 pub(crate) fn decrypt_if_encrypted(key: &[u8; 32], stored: &str) -> Result<String, String> {
     if stored.starts_with(ENCRYPTION_PREFIX) {
-        return decrypt(key, stored);
-    }
-    if looks_encrypted(stored) && js_sys::JSON::parse(stored).is_err() {
         return decrypt(key, stored);
     }
     Ok(stored.to_string())
