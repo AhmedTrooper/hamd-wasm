@@ -53,6 +53,14 @@ fn memory_remove_and_get_missing_returns_null() {
 }
 
 #[wasm_bindgen_test]
+fn memory_has_counts_stored_null_as_present() {
+    let store = Memory::new(None);
+    store.set("null", JsValue::NULL, None).unwrap();
+    assert!(store.has("null").unwrap());
+    assert!(store.get("null").unwrap().is_null());
+}
+
+#[wasm_bindgen_test]
 fn memory_mset_mget() {
     let store = Memory::new(None);
     let obj = js_sys::Object::new();

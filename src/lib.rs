@@ -194,7 +194,29 @@ macro_rules! impl_storage {
             }
 
             pub fn has(&self, key: &str) -> Result<bool, JsValue> {
-                Ok(!self.get(key)?.is_null())
+                validate_key(key)?;
+                let full_key = {
+                    let guard = self.state.lock();
+                    format!("{}{}", guard.prefix, key)
+                };
+                let exists = self
+                    .state
+                    .lock()
+                    .backend
+                    .raw_get(&full_key)
+                    .map_err(JsValue::from)?
+                    .is_some();
+                if !exists {
+                    return Ok(false);
+                }
+                self.get(key)?;
+                Ok(self
+                    .state
+                    .lock()
+                    .backend
+                    .raw_get(&full_key)
+                    .map_err(JsValue::from)?
+                    .is_some())
             }
 
             pub fn keys(&self) -> Result<JsValue, JsValue> {
@@ -581,7 +603,21 @@ impl IndexedDb {
     }
 
     pub async fn has(&self, key: &str) -> Result<bool, JsValue> {
-        Ok(!self.get(key).await?.is_null())
+        validate_key(key)?;
+        let full_key = format!("{}{}", self.state.lock().prefix, key);
+        let db = self.db().await?;
+        if idb::raw_get(&db, &full_key)
+            .await
+            .map_err(JsValue::from)?
+            .is_none()
+        {
+            return Ok(false);
+        }
+        self.get(key).await?;
+        Ok(idb::raw_get(&db, &full_key)
+            .await
+            .map_err(JsValue::from)?
+            .is_some())
     }
 
     pub async fn keys(&self) -> Result<JsValue, JsValue> {
