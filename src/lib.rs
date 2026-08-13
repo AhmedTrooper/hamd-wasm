@@ -74,6 +74,11 @@ macro_rules! impl_storage {
                 value: JsValue,
                 ttl_ms: Option<f64>,
             ) -> Result<(), JsValue> {
+                if let Some(ms) = ttl_ms
+                    && (!ms.is_finite() || ms <= 0.0)
+                {
+                    return Err(JsValue::from_str("ttlMs must be a positive finite number"));
+                }
                 let (full_key, stored) = {
                     let mut guard = self.state.lock();
                     let full_key = format!("{}{}", guard.prefix, key);
@@ -359,6 +364,11 @@ impl IndexedDb {
     }
 
     pub async fn set(&self, key: &str, value: JsValue, ttl_ms: Option<f64>) -> Result<(), JsValue> {
+        if let Some(ms) = ttl_ms
+            && (!ms.is_finite() || ms <= 0.0)
+        {
+            return Err(JsValue::from_str("ttlMs must be a positive finite number"));
+        }
         let full_key = format!("{}{}", self.state.lock().prefix, key);
         let json: String = js_sys::JSON::stringify(&value)?.into();
         let payload = match ttl_ms {
