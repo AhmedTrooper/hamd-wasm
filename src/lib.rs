@@ -146,7 +146,8 @@ macro_rules! impl_storage {
                 match guard.backend.raw_get(&full_key).map_err(JsValue::from)? {
                     Some(raw) => {
                         let json = match &guard.encryption_key {
-                            Some(ek) => crypto::decrypt(ek.bytes(), &raw).map_err(JsValue::from)?,
+                            Some(ek) => crypto::decrypt_if_encrypted(ek.bytes(), &raw)
+                                .map_err(JsValue::from)?,
                             None => {
                                 if crypto::looks_encrypted(&raw)
                                     && js_sys::JSON::parse(&raw).is_err()
@@ -448,7 +449,7 @@ impl IndexedDb {
 
     fn decrypt_value(&self, stored: &str) -> Result<String, JsValue> {
         match &self.state.lock().encryption_key {
-            Some(ek) => crypto::decrypt(ek.bytes(), stored).map_err(JsValue::from),
+            Some(ek) => crypto::decrypt_if_encrypted(ek.bytes(), stored).map_err(JsValue::from),
             None => {
                 if crypto::looks_encrypted(stored) && js_sys::JSON::parse(stored).is_err() {
                     return Err(JsValue::from_str(

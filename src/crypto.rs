@@ -70,3 +70,13 @@ pub(crate) fn looks_encrypted(value: &str) -> bool {
             && value.len().is_multiple_of(2)
             && value.as_bytes().iter().all(u8::is_ascii_hexdigit))
 }
+
+pub(crate) fn decrypt_if_encrypted(key: &[u8; 32], stored: &str) -> Result<String, String> {
+    if stored.starts_with(ENCRYPTION_PREFIX) {
+        return decrypt(key, stored);
+    }
+    if looks_encrypted(stored) && js_sys::JSON::parse(stored).is_err() {
+        return decrypt(key, stored);
+    }
+    Ok(stored.to_string())
+}
