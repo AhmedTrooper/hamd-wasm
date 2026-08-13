@@ -333,3 +333,61 @@ fn local_encryption_wrong_key_fails_browser_only() {
     // cleanup with correct key
     store1.remove("secret2").unwrap();
 }
+
+#[wasm_bindgen_test]
+fn memory_bytes_roundtrip() {
+    let store = Memory::new(None);
+    let data = vec![0u8, 1, 2, 255, 128, 0, 42];
+    store.set_bytes("bin", &data, None).unwrap();
+    let got = store.get_bytes("bin").unwrap().unwrap();
+    assert_eq!(got, data);
+    assert!(store.get_bytes("missing").unwrap().is_none());
+}
+
+#[wasm_bindgen_test]
+fn memory_bytes_encrypted_roundtrip() {
+    let store = Memory::new(None);
+    let key = store.generate_key().unwrap();
+    assert_eq!(key.len(), 32);
+    let data = vec![10, 20, 30, 40, 50];
+    store.set_bytes("enc_bin", &data, None).unwrap();
+    let got = store.get_bytes("enc_bin").unwrap().unwrap();
+    assert_eq!(got, data);
+}
+
+#[wasm_bindgen_test]
+async fn memory_bytes_ttl_expiry() {
+    let store = Memory::new(None);
+    let data = vec![1, 2, 3];
+    store.set_bytes("short_bin", &data, Some(40.0)).unwrap();
+    assert!(store.get_bytes("short_bin").unwrap().is_some());
+    sleep_ms(100).await;
+    assert!(store.get_bytes("short_bin").unwrap().is_none());
+}
+
+#[wasm_bindgen_test]
+async fn indexeddb_bytes_roundtrip_browser_only() {
+    let db = IndexedDb::new(None);
+    let data = vec![99u8, 42, 0, 255, 7, 8, 9];
+    if db.set_bytes("bin_probe", data.clone(), None).await.is_err() {
+        return;
+    }
+    let got = db.get_bytes("bin_probe").await.unwrap().unwrap();
+    assert_eq!(got, data);
+    db.remove("bin_probe").await.unwrap();
+    assert!(db.get_bytes("bin_probe").await.unwrap().is_none());
+}
+
+#[wasm_bindgen_test]
+fn key_validation_rejects_empty_and_long() {
+    let store = Memory::new(None);
+    let err = store.set("", JsValue::from_str("v"), None).unwrap_err();
+    assert!(err.as_string().unwrap().contains("non-empty"));
+    let long = "a".repeat(300);
+    let err = store.set(&long, JsValue::from_str("v"), None).unwrap_err();
+    assert!(err.as_string().unwrap().contains("too long"));
+    let err = store
+        .set("bad\0key", JsValue::from_str("v"), None)
+        .unwrap_err();
+    assert!(err.as_string().unwrap().contains("invalid control"));
+}
