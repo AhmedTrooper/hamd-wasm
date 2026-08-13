@@ -46,6 +46,17 @@ impl CookieBackend {
             })
             .collect())
     }
+
+    fn attributes(max_age: u32) -> String {
+        let secure = web_sys::window()
+            .and_then(|w| w.location().protocol().ok())
+            .is_some_and(|p| p == "https:");
+        let mut attributes = format!("path=/; max-age={max_age}; SameSite=Lax");
+        if secure {
+            attributes.push_str("; Secure");
+        }
+        attributes
+    }
 }
 
 impl StorageOps for CookieBackend {
@@ -56,16 +67,12 @@ impl StorageOps for CookieBackend {
             .unwrap_or_else(|| key.to_string());
         let encoded = js_sys::encode_uri_component(value);
         let encoded_str: String = encoded.as_string().unwrap_or_else(|| value.to_string());
-        let secure = web_sys::window()
-            .and_then(|w| w.location().protocol().ok())
-            .is_some_and(|p| p == "https:");
-        let mut cookie = format!(
-            "{}={}; path=/; max-age=31536000; SameSite=Lax",
-            encoded_key, encoded_str
+        let cookie = format!(
+            "{}={}; {}",
+            encoded_key,
+            encoded_str,
+            Self::attributes(31_536_000)
         );
-        if secure {
-            cookie.push_str("; Secure");
-        }
         // Browsers enforce the cookie limit on the serialized cookie, after encoding and
         // including attributes. Keep a small margin below the usual 4096-byte limit.
         if cookie.len() > 4_000 {
@@ -85,7 +92,7 @@ impl StorageOps for CookieBackend {
         let encoded_key = js_sys::encode_uri_component(key)
             .as_string()
             .unwrap_or_else(|| key.to_string());
-        let cookie = format!("{}=; path=/; max-age=0", encoded_key);
+        let cookie = format!("{}=; {}", encoded_key, Self::attributes(0));
         doc.set_cookie(&cookie)
             .map_err(|_| StorageError::Other("cookie delete denied".into()))
     }
