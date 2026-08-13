@@ -83,7 +83,7 @@ a.clear(); // b still has 'x'
 
 ## Complete API — every method, no omission
 
-Every type implements the same names. `IndexedDb` returns `Promise` for storage ops; constructors, `enableEncryption`/`generateKey`, `subscribe` stay sync.
+Every type implements the same names. `IndexedDb` returns `Promise` for storage ops; constructors, `enableEncryption`/`createEncryptionKey`, `subscribe` stay sync.
 
 ### `new Type(prefix?)`
 
@@ -170,11 +170,11 @@ store.mget(['a','b','missing']); // → { a:1, b:2, missing: null } (sync) / Pro
 // validation: mset keys must be strings, mget keys must be strings + validate_key each; non-string → "mset keys must be strings"/"mget keys must be strings"
 ```
 
-### `enableEncryption(key)` / `generateKey()` — AES-256-GCM
+### `enableEncryption(key)` / `createEncryptionKey()` — AES-256-GCM
 
 ```ts
 const s = new Local();
-const key = s.generateKey(); // Uint8Array(32), also enables encryption for this instance
+const key = s.createEncryptionKey(); // Uint8Array(32), also enables encryption for this instance
 
 // bring your own
 s.enableEncryption(my32Bytes); // throws "key must be exactly 32 bytes" if !=32
@@ -211,7 +211,7 @@ await db.set('k','v');  await db.get('k');  await db.has('k');
 await db.keys(); await db.length(); await db.purgeExpired();
 await db.mset({a:1});   await db.mget(['a']);
 await db.setBytes('f', new Uint8Array([1])); await db.getBytes('f');
-db.subscribe((a,k)=>{}); db.enableEncryption(key); db.generateKey();
+db.subscribe((a,k)=>{}); db.enableEncryption(key); db.createEncryptionKey();
 ```
 
 * `IndexedDb` holds lazy `IdbDatabase` (`hamd v1 kv` store) with `cached_db`, `open_db` `onupgradeneeded`, `IDBRequest→Promise` self-cleaning (`onsuccess/onerror` cleared via `Rc<RefCell>`), batch deletes queued on single `Readwrite` txn before any `await`.

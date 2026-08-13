@@ -83,11 +83,6 @@ macro_rules! impl_storage {
                 Ok(key_vec)
             }
 
-            #[wasm_bindgen(js_name = "generateKey")]
-            pub fn generate_key(&self) -> Result<Vec<u8>, JsValue> {
-                self.create_encryption_key()
-            }
-
             pub fn set(
                 &self,
                 key: &str,
@@ -506,11 +501,6 @@ impl IndexedDb {
         bytes.copy_from_slice(&key_vec);
         self.state.lock().encryption_key = Some(EncryptionKey::new(bytes));
         Ok(key_vec)
-    }
-
-    #[wasm_bindgen(js_name = "generateKey")]
-    pub fn generate_key(&self) -> Result<Vec<u8>, JsValue> {
-        self.create_encryption_key()
     }
 
     pub async fn set(&self, key: &str, value: JsValue, ttl_ms: Option<f64>) -> Result<(), JsValue> {

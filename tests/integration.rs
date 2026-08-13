@@ -160,7 +160,7 @@ fn memory_preserves_objects_with_expiration_like_fields() {
 #[wasm_bindgen_test]
 fn memory_encryption_roundtrip() {
     let store = Memory::new(None);
-    let key = store.generate_key().unwrap();
+    let key = store.create_encryption_key().unwrap();
     assert_eq!(key.len(), 32);
     store
         .set("secret", JsValue::from_str("s3cr3t"), None)
@@ -173,12 +173,12 @@ fn memory_encryption_roundtrip() {
     other.enable_encryption(&key).unwrap();
     // Same key can decrypt if we copy raw storage; we test wrong key path by
     // using a fresh random key on a clone of the encrypted payload.
-    let wrong_key = other.generate_key().unwrap();
+    let wrong_key = other.create_encryption_key().unwrap();
     let bad = Memory::new(None);
     bad.enable_encryption(&wrong_key).unwrap();
     // Direct crypto layer test: decrypt with wrong key fails.
     // We do not share raw ciphertext across instances here because
-    // Memory is isolated; the API-level guarantee is that generateKey
+    // Memory is isolated; the API-level guarantee is that createEncryptionKey
     // produces 32 bytes and enableEncryption validates length.
     let err = bad.enable_encryption(&[0u8; 16]).unwrap_err();
     assert!(err.as_string().unwrap().contains("32 bytes"));
@@ -216,7 +216,7 @@ fn local_encrypted_value_requires_key_browser_only() {
         return;
     }
     encrypted.remove("probe").unwrap();
-    encrypted.generate_key().unwrap();
+    encrypted.create_encryption_key().unwrap();
     encrypted
         .set("secret", JsValue::from_str("value"), None)
         .unwrap();
@@ -421,12 +421,12 @@ fn local_encryption_wrong_key_fails_browser_only() {
         return;
     }
     store1.remove("probe").unwrap();
-    let _key1 = store1.generate_key().unwrap();
+    let _key1 = store1.create_encryption_key().unwrap();
     store1
         .set("secret2", JsValue::from_str("s3cr3t"), None)
         .unwrap();
     let store2 = Local::new(Some(prefix.clone()));
-    let _wrong = store2.generate_key().unwrap();
+    let _wrong = store2.create_encryption_key().unwrap();
     let result = store2.get("secret2");
     assert!(result.is_err());
     assert!(
@@ -453,7 +453,7 @@ fn memory_bytes_roundtrip() {
 #[wasm_bindgen_test]
 fn memory_bytes_encrypted_roundtrip() {
     let store = Memory::new(None);
-    let key = store.generate_key().unwrap();
+    let key = store.create_encryption_key().unwrap();
     assert_eq!(key.len(), 32);
     let data = vec![10, 20, 30, 40, 50];
     store.set_bytes("enc_bin", &data, None).unwrap();

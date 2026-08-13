@@ -17,8 +17,8 @@ Hamd never persists or transmits them. Do not put a long-lived encryption key in
 public frontend source or a `NEXT_PUBLIC_*` variable. For sensitive data, consider
 server-side encryption or a key derived from user-provided secret material.
 
-`generateKey()` remains as a compatibility alias, but do not call either method on
-every page load: that would create a different key and make old values unreadable.
+Do not call `createEncryptionKey()` on every page load: that would create a
+different key and make old values unreadable.
 
 Encrypted records use the versioned `hamd:enc:v1:` format. Hamd continues to
 read legacy unprefixed ciphertext written by earlier releases.
