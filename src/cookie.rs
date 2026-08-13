@@ -47,13 +47,23 @@ impl CookieBackend {
 
 impl StorageOps for CookieBackend {
     fn raw_set(&mut self, key: &str, value: &str) -> Result<(), StorageError> {
+        // 4KB per cookie limit; fail early with quota error to trigger retry path.
+        if key.len() + value.len() > 3900 {
+            return Err(StorageError::QuotaExceeded);
+        }
         let doc = Self::html_document()?;
         let encoded = js_sys::encode_uri_component(value);
         let encoded_str: String = encoded.as_string().unwrap_or_else(|| value.to_string());
-        let cookie = format!(
+        let secure = web_sys::window()
+            .and_then(|w| w.location().protocol().ok())
+            .is_some_and(|p| p == "https:");
+        let mut cookie = format!(
             "{}={}; path=/; max-age=31536000; SameSite=Lax",
             key, encoded_str
         );
+        if secure {
+            cookie.push_str("; Secure");
+        }
         doc.set_cookie(&cookie)
             .map_err(|_| StorageError::Other("cookie write denied".into()))
     }
