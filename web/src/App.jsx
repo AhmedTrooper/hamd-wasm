@@ -663,9 +663,6 @@ console.log(cache.mget(["a", "b", "missing"]));
               <CopyButton text="npm i @ahmedtooper_npm/hamd-wasm" />
             </div>
           </div>
-          <div class="foot-tip">
-            Theme persisted via the browser&apos;s <code>localStorage</code>.
-          </div>
         </div>
       </aside>
 
