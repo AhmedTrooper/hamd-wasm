@@ -23,5 +23,20 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde-wasm-bindgen = "0.6.5"
 wasm-bindgen = "0.2.127"
 wasm-bindgen-futures = "0.4.77"
-web-sys = { version = "0.3.104", features = ["Window", "Storage", "Document", "HtmlDocument"] }
+web-sys = { version = "0.3.104", features = [
+    "DomException",
+    "DomStringList",
+    "Document",
+    "Event",
+    "HtmlDocument",
+    "IdbDatabase",
+    "IdbFactory",
+    "IdbObjectStore",
+    "IdbOpenDbRequest",
+    "IdbRequest",
+    "IdbTransaction",
+    "IdbTransactionMode",
+    "Storage",
+    "Window",
+] }
 zeroize = { version = "1.9.0", features = ["zeroize_derive"] }

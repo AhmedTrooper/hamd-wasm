@@ -1,5 +1,6 @@
 mod cookie;
 mod crypto;
+mod idb;
 mod memory;
 mod ops;
 mod web;
@@ -188,3 +189,158 @@ impl_storage!(
     cookie::CookieBackend,
     cookie::CookieBackend::new()
 );
+
+struct IndexedDbInner {
+    backend: idb::IdbBackend,
+    prefix: String,
+    encryption_key: Option<EncryptionKey>,
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct IndexedDb {
+    state: Arc<Mutex<IndexedDbInner>>,
+}
+
+impl IndexedDb {
+    async fn db(&self) -> Result<web_sys::IdbDatabase, JsValue> {
+        if let Some(db) = self.state.lock().backend.cached_db() {
+            return Ok(db);
+        }
+        let db = idb::open_db().await.map_err(|e| JsValue::from_str(&e))?;
+        self.state.lock().backend.set_cached_db(db.clone());
+        Ok(db)
+    }
+
+    fn encrypt_value(&self, json: &str) -> Result<String, JsValue> {
+        match &self.state.lock().encryption_key {
+            Some(ek) => {
+                crypto::encrypt(ek.bytes(), json.as_bytes()).map_err(|e| JsValue::from_str(&e))
+            }
+            None => Ok(json.to_string()),
+        }
+    }
+
+    fn decrypt_value(&self, stored: &str) -> Result<String, JsValue> {
+        match &self.state.lock().encryption_key {
+            Some(ek) => crypto::decrypt(ek.bytes(), stored).map_err(|e| JsValue::from_str(&e)),
+            None => Ok(stored.to_string()),
+        }
+    }
+}
+
+#[wasm_bindgen]
+impl IndexedDb {
+    #[wasm_bindgen(constructor)]
+    pub fn new(prefix: Option<String>) -> Self {
+        Self {
+            state: Arc::new(Mutex::new(IndexedDbInner {
+                backend: idb::IdbBackend::new(),
+                prefix: prefix.unwrap_or_else(|| "hamd:".into()),
+                encryption_key: None,
+            })),
+        }
+    }
+
+    #[wasm_bindgen(js_name = "enableEncryption")]
+    pub fn enable_encryption(&self, key: &[u8]) -> Result<(), JsValue> {
+        if key.len() != 32 {
+            return Err(JsValue::from_str("key must be exactly 32 bytes"));
+        }
+        let mut bytes = [0u8; 32];
+        bytes.copy_from_slice(key);
+        self.state.lock().encryption_key = Some(EncryptionKey::new(bytes));
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = "generateKey")]
+    pub fn generate_key(&self) -> Result<Vec<u8>, JsValue> {
+        let key_vec = crypto::generate_key();
+        let mut bytes = [0u8; 32];
+        bytes.copy_from_slice(&key_vec);
+        self.state.lock().encryption_key = Some(EncryptionKey::new(bytes));
+        Ok(key_vec)
+    }
+
+    pub async fn set(&self, key: &str, value: JsValue) -> Result<(), JsValue> {
+        let full_key = format!("{}{}", self.state.lock().prefix, key);
+        let json: String = js_sys::JSON::stringify(&value)?.into();
+        let stored = self.encrypt_value(&json)?;
+        let db = self.db().await?;
+        idb::raw_set(&db, &full_key, &stored)
+            .await
+            .map_err(|e| JsValue::from_str(&e))
+    }
+
+    pub async fn get(&self, key: &str) -> Result<JsValue, JsValue> {
+        let full_key = format!("{}{}", self.state.lock().prefix, key);
+        let db = self.db().await?;
+        let Some(stored) = idb::raw_get(&db, &full_key)
+            .await
+            .map_err(|e| JsValue::from_str(&e))?
+        else {
+            return Ok(JsValue::NULL);
+        };
+        let json = self.decrypt_value(&stored)?;
+        js_sys::JSON::parse(&json)
+    }
+
+    pub async fn remove(&self, key: &str) -> Result<(), JsValue> {
+        let full_key = format!("{}{}", self.state.lock().prefix, key);
+        let db = self.db().await?;
+        idb::raw_remove(&db, &[full_key])
+            .await
+            .map_err(|e| JsValue::from_str(&e))
+    }
+
+    pub async fn clear(&self) -> Result<(), JsValue> {
+        let prefix = self.state.lock().prefix.clone();
+        let db = self.db().await?;
+        let keys = idb::raw_keys(&db)
+            .await
+            .map_err(|e| JsValue::from_str(&e))?;
+        let doomed: Vec<String> = keys
+            .into_iter()
+            .filter(|k| k.starts_with(&prefix))
+            .collect();
+        idb::raw_remove(&db, &doomed)
+            .await
+            .map_err(|e| JsValue::from_str(&e))
+    }
+
+    pub async fn has(&self, key: &str) -> Result<bool, JsValue> {
+        let full_key = format!("{}{}", self.state.lock().prefix, key);
+        let db = self.db().await?;
+        let found = idb::raw_get(&db, &full_key)
+            .await
+            .map_err(|e| JsValue::from_str(&e))?;
+        Ok(found.is_some())
+    }
+
+    pub async fn keys(&self) -> Result<JsValue, JsValue> {
+        let prefix = self.state.lock().prefix.clone();
+        let db = self.db().await?;
+        let arr = js_sys::Array::new();
+        for k in idb::raw_keys(&db)
+            .await
+            .map_err(|e| JsValue::from_str(&e))?
+        {
+            if let Some(stripped) = k.strip_prefix(&prefix) {
+                arr.push(&JsValue::from_str(stripped));
+            }
+        }
+        Ok(arr.into())
+    }
+
+    pub async fn length(&self) -> Result<u32, JsValue> {
+        let prefix = self.state.lock().prefix.clone();
+        let db = self.db().await?;
+        let count = idb::raw_keys(&db)
+            .await
+            .map_err(|e| JsValue::from_str(&e))?
+            .into_iter()
+            .filter(|k| k.starts_with(&prefix))
+            .count();
+        Ok(count as u32)
+    }
+}

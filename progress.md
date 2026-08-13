@@ -3,7 +3,8 @@
 ## Architecture
 
 Single API, type-based storage selection via macro-generated `#[wasm_bindgen]` types.
-Each type (Local, Session, Memory, Cookies) shares identical methods.
+Each type (Local, Session, Memory, Cookies) shares identical sync methods.
+IndexedDb shares the same method names but async (Promise-returning), since IndexedDB is async.
 Internal `StorageOps` trait abstracts raw backend operations.
 All state wrapped in `Arc<Mutex<…>>` (parking_lot) for thread safety across Web Workers.
 
@@ -16,13 +17,15 @@ All state wrapped in `Arc<Mutex<…>>` (parking_lot) for thread safety across We
 - [x] `memory.rs` — HashMap-backed in-memory backend (SSR/testing)
 - [x] `cookie.rs` — Cookie backend (HtmlDocument.cookie)
 - [x] `lib.rs` — `impl_storage!` macro generating Local, Session, Memory, Cookies types
+- [x] `idb.rs` — async IndexedDB backend: lazy DB open (v1, `kv` store), IDBRequest→Promise
+      with self-cleaning handlers, batch deletes in one transaction; no lock held across awaits
+- [x] `lib.rs` — `IndexedDb` type with async set/get/remove/clear/has/keys/length
 - [x] All checks pass: `cargo check`, `cargo fmt`, `cargo clippy` (zero warnings, `-D warnings`)
 - [x] CI workflow: fmt, clippy, check, wasm-pack build on push/PR to main/dev
 - [x] Release workflow: validate → publish crates.io + npm → GitHub Release on `v*` tags
 
 ## TODO
 
-- [ ] IndexedDB backend (async, needs wasm-bindgen-futures)
 - [ ] TTL (time-to-live) support with auto-eviction on read
 - [ ] Cross-tab sync via BroadcastChannel API
 - [ ] Bulk operations: mget, mset
