@@ -2,9 +2,25 @@
 name = "hamd-wasm"
 version = "0.1.0"
 edition = "2024"
+description = "Unified, encrypted, type-safe browser storage — five backends (localStorage, sessionStorage, cookies, memory, IndexedDB) with AES-256-GCM, TTL, and cross-tab sync, built in Rust and compiled to WebAssembly"
+license = "MIT"
+repository = "https://github.com/AhmedTrooper/hamd-wasm"
+readme = "README.md"
+keywords = ["storage", "localstorage", "indexeddb", "encryption", "wasm"]
+categories = ["wasm", "web-programming"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+# Bundled wasm-opt (binaryen 117) needs modern wasm features enabled explicitly.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = [
+    "-Oz",
+    "--enable-bulk-memory",
+    "--enable-sign-ext",
+    "--enable-mutable-globals",
+    "--enable-nontrapping-float-to-int",
+]
 
 [profile.release]
 opt-level = "z"       # Optimize for minimum binary size
@@ -43,3 +59,6 @@ web-sys = { version = "0.3.104", features = [
     "Window",
 ] }
 zeroize = { version = "1.9.0", features = ["zeroize_derive"] }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
