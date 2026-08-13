@@ -122,7 +122,7 @@ store.get('otp');    // → value or null after 60s (entry auto-removed)
 
 ```ts
 const bytes = new Uint8Array([0, 1, 255, 42]);
-store.setBytes('avatar', bytes);           // sync backends: base64 {"__bin":true,"data":"b64"} + same TTL/encrypt
+store.setBytes('avatar', bytes);           // sync backends: versioned base64 envelope + same TTL/encrypt
 store.getBytes('avatar'); // → Uint8Array | undefined (null→undefined)
 
 const db = new IndexedDb();
@@ -181,7 +181,7 @@ s.enableEncryption(my32Bytes); // throws "key must be exactly 32 bytes" if !=32
 
 s.set('secret', { ssn: '000' });  // stored as versioned AES-GCM payload
 s.get('secret'); // wrong key → "decryption failed: wrong key or corrupted data" / "hex decode: …"/"utf-8 decode: …"
-s.setBytes('enc', new Uint8Array([1,2,3])); // also encrypted (encrypts the __bin JSON)
+s.setBytes('enc', new Uint8Array([1,2,3])); // also encrypted (encrypts the binary envelope)
 
 // per-instance: enable right after new; keys zeroized on drop (ZeroizeOnDrop)
 ```
