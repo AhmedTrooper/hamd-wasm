@@ -621,9 +621,7 @@ console.log(cache.mget(["a", "b", "missing"]));
             <span class="dot" /> One API · Five backends · Encrypted
           </div>
           <h1>
-            Browser storage that <span>just works</span>
-            <br />
-            on every backend.
+            Browser storage that <span>just works</span> on every backend.
           </h1>
           <p class="lead">
             <strong>hamd-wasm</strong> is a single typed interface over{" "}
