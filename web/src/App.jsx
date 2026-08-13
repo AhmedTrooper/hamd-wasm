@@ -60,18 +60,41 @@ function CodeBlock(props) {
 
 function CopyButton(props) {
   const [copied, setCopied] = createSignal(false);
+  const [errored, setErrored] = createSignal(false);
+
+  const copy = async () => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(props.text);
+      } else {
+        // Fallback for non-secure contexts (older browsers, http://)
+        const ta = document.createElement("textarea");
+        ta.value = props.text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setErrored(false);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      setErrored(true);
+      setTimeout(() => setErrored(false), 1500);
+    }
+  };
+
   return (
     <button
-      class="copy-btn"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(props.text);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1200);
-        } catch {}
-      }}
+      class={`copy-btn ${copied() ? "copied" : ""} ${errored() ? "errored" : ""}`}
+      onClick={copy}
+      aria-label="Copy code to clipboard"
     >
-      {copied() ? "Copied" : "Copy"}
+      <Show when={copied()} fallback={<Show when={errored()} fallback="Copy">Failed</Show>}>
+        Copied
+      </Show>
     </button>
   );
 }
@@ -402,6 +425,34 @@ console.log(cache.mget(["a", "b", "missing"]));
     },
   ];
 
+  /* Package-manager install snippets — used by the install section tabs */
+  const installSamples = [
+    {
+      id: "npm",
+      label: "npm",
+      code: `npm install @ahmedtooper_npm/hamd-wasm`,
+      note: "Node 18+. Adds to package.json + package-lock.json.",
+    },
+    {
+      id: "yarn",
+      label: "yarn",
+      code: `yarn add @ahmedtooper_npm/hamd-wasm`,
+      note: "Yarn 1.x classic and Yarn berry both accept `add`.",
+    },
+    {
+      id: "pnpm",
+      label: "pnpm",
+      code: `pnpm add @ahmedtooper_npm/hamd-wasm`,
+      note: "Fastest install on large monorepos.",
+    },
+    {
+      id: "bun",
+      label: "bun",
+      code: `bun add @ahmedtooper_npm/hamd-wasm`,
+      note: "Bun 1.0+. Adds to package.json + bun.lock.",
+    },
+  ];
+
   /* Shared suppression flag for scroll-tracking. Mutated by `go()` and
      read by the IntersectionObserver registered in onMount(). Using a
      plain object so both closures see the same value across renders. */
@@ -607,7 +658,10 @@ console.log(cache.mget(["a", "b", "missing"]));
         <div class="sidebar-foot">
           <div class="foot-card">
             <div class="foot-card-label">Install</div>
-            <code class="foot-cmd">npm i @ahmedtooper_npm/hamd-wasm</code>
+            <div class="foot-cmd-wrap">
+              <code class="foot-cmd">npm i @ahmedtooper_npm/hamd-wasm</code>
+              <CopyButton text="npm i @ahmedtooper_npm/hamd-wasm" />
+            </div>
           </div>
           <div class="foot-tip">
             Theme persisted via the browser&apos;s <code>localStorage</code>.
@@ -723,18 +777,23 @@ await b.get("user");`}
             ships <code>hamd_wasm_bg.wasm</code>, the JS glue, and a{" "}
             <code>.d.ts</code> — no Rust toolchain required at install time.
           </p>
-          <p>npm:</p>
-          <CodeBlock lang="bash" code={`npm install @ahmedtooper_npm/hamd-wasm`} />
-          <p>Other package managers:</p>
+
+          <h3>Install</h3>
+          <p>
+            Pick your package manager. Each command installs the same package
+            and its wasm artifact.
+          </p>
+          <Tabs samples={installSamples} />
+
+          <h3>Quick import</h3>
+          <p>Five classes, one import:</p>
           <CodeBlock
-            lang="bash"
-            code={`yarn add @ahmedtooper_npm/hamd-wasm
-pnpm add @ahmedtooper_npm/hamd-wasm
-bun add  @ahmedtooper_npm/hamd-wasm`}
+            code={`import { Local, Session, Cookies, Memory, IndexedDb } from "@ahmedtooper_npm/hamd-wasm";`}
           />
+
           <h3>TypeScript</h3>
           <p>
-            Types are included. The package exports five classes — import them
+            Types are included. The package exports five classes — use them
             directly:
           </p>
           <CodeBlock

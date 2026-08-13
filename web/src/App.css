@@ -455,6 +455,10 @@ body.nav-locked {
   margin-bottom: 6px;
 }
 
+.foot-cmd-wrap {
+  position: relative;
+}
+
 .foot-cmd {
   font-family: var(--font-mono);
   font-size: 11.5px;
@@ -462,9 +466,20 @@ body.nav-locked {
   background: var(--bg);
   border: 1px solid hsl(var(--border));
   border-radius: 4px;
-  padding: 4px 6px;
+  padding: 6px 56px 6px 8px;
   display: block;
   word-break: break-all;
+  line-height: 1.4;
+}
+
+.foot-cmd-wrap .copy-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 10.5px;
+  opacity: 1;
 }
 
 .foot-tip {
@@ -813,14 +828,31 @@ body.nav-locked {
   color: var(--text-muted);
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s, background-color 0.15s;
 }
-.code-wrap:hover .copy-btn {
+.code-wrap:hover .copy-btn,
+.tabs .copy-btn {
   opacity: 1;
 }
 .copy-btn:hover {
   color: var(--fg);
   border-color: hsl(var(--ring));
+}
+.copy-btn.copied {
+  color: hsl(142 50% 38%);
+  border-color: hsl(142 50% 38%);
+  background: hsl(142 50% 94%);
+  opacity: 1;
+}
+[data-theme="dark"] .copy-btn.copied {
+  color: hsl(150 50% 75%);
+  border-color: hsl(150 40% 40%);
+  background: hsl(150 40% 14%);
+}
+.copy-btn.errored {
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive));
+  opacity: 1;
 }
 
 /* =========================================================
