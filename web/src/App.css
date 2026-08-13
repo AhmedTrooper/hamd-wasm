@@ -102,6 +102,7 @@ html {
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   scroll-behavior: smooth;
+  overflow-x: hidden;
 }
 
 body {
@@ -111,11 +112,13 @@ body {
   font-size: 15px;
   line-height: 1.65;
   font-weight: 400;
+  overflow-x: hidden;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 #root {
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 ::selection {
@@ -206,12 +209,25 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   height: 56px;
   padding: 0 24px;
   border-bottom: 1px solid hsl(var(--border));
   background: hsl(var(--background) / 0.8);
   backdrop-filter: saturate(180%) blur(8px);
   -webkit-backdrop-filter: saturate(180%) blur(8px);
+  min-width: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  text-decoration: none;
+  color: var(--fg);
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .brand {
@@ -239,6 +255,7 @@ button {
   display: flex;
   flex-direction: column;
   line-height: 1.2;
+  min-width: 0;
 }
 
 .brand-title {
@@ -465,6 +482,7 @@ body.nav-locked {
   padding: 48px 56px 80px;
   max-width: 920px;
   width: 100%;
+  min-width: 0;
   margin: 0 auto;
 }
 
@@ -1087,6 +1105,7 @@ body.nav-locked {
     left: 0;
     height: 100vh;
     width: min(280px, 86vw);
+    max-width: 86vw;
     z-index: 40;
     padding: 18px 14px 24px;
     border-right: 1px solid hsl(var(--border));
@@ -1094,6 +1113,12 @@ body.nav-locked {
     transform: translateX(-100%);
     transition: transform 0.25s ease;
     overflow-y: auto;
+    /* Drop out of the grid — it's an off-canvas drawer now */
+    grid-area: none;
+  }
+
+  .sidebar-backdrop {
+    grid-area: none;
   }
 
   .layout.nav-open .sidebar {
@@ -1114,6 +1139,21 @@ body.nav-locked {
   .main {
     padding: 32px 32px 64px;
   }
+}
+
+.tab-trigger {
+  height: 40px;
+  padding: 0 16px;
+  font-size: 13.5px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
 }
 
 /* Phone */
@@ -1166,6 +1206,22 @@ body.nav-locked {
   .doc-foot {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+/* Tiny (≤ 400 px) */
+@media (max-width: 400px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+  }
+  .tabs-list {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .tab-trigger {
+    padding: 0 10px;
+    font-size: 12px;
   }
 }
 
