@@ -10,6 +10,7 @@ mod web;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
+use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
 use crate::crypto::EncryptionKey;
@@ -223,6 +224,34 @@ macro_rules! impl_storage {
                 Ok(Closure::once_into_js(move || {
                     state.lock().sync.unsubscribe(id);
                 }))
+            }
+
+            pub fn mset(
+                &self,
+                entries: js_sys::Object,
+                ttl_ms: Option<f64>,
+            ) -> Result<(), JsValue> {
+                let pairs = js_sys::Object::entries(&entries);
+                for i in 0..pairs.length() {
+                    let pair: js_sys::Array = pairs.get(i).unchecked_into();
+                    let key = pair
+                        .get(0)
+                        .as_string()
+                        .ok_or_else(|| JsValue::from_str("mset keys must be strings"))?;
+                    self.set(&key, pair.get(1), ttl_ms)?;
+                }
+                Ok(())
+            }
+
+            pub fn mget(&self, keys: js_sys::Array) -> Result<JsValue, JsValue> {
+                let result = js_sys::Object::new();
+                for i in 0..keys.length() {
+                    if let Some(key) = keys.get(i).as_string() {
+                        let value = self.get(&key)?;
+                        js_sys::Reflect::set(&result, &JsValue::from_str(&key), &value)?;
+                    }
+                }
+                Ok(result.into())
             }
         }
     };
@@ -461,5 +490,29 @@ impl IndexedDb {
         Ok(Closure::once_into_js(move || {
             state.lock().sync.unsubscribe(id);
         }))
+    }
+
+    pub async fn mset(&self, entries: js_sys::Object, ttl_ms: Option<f64>) -> Result<(), JsValue> {
+        let pairs = js_sys::Object::entries(&entries);
+        for i in 0..pairs.length() {
+            let pair: js_sys::Array = pairs.get(i).unchecked_into();
+            let key = pair
+                .get(0)
+                .as_string()
+                .ok_or_else(|| JsValue::from_str("mset keys must be strings"))?;
+            self.set(&key, pair.get(1), ttl_ms).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn mget(&self, keys: js_sys::Array) -> Result<JsValue, JsValue> {
+        let result = js_sys::Object::new();
+        for i in 0..keys.length() {
+            if let Some(key) = keys.get(i).as_string() {
+                let value = self.get(&key).await?;
+                js_sys::Reflect::set(&result, &JsValue::from_str(&key), &value)?;
+            }
+        }
+        Ok(result.into())
     }
 }
