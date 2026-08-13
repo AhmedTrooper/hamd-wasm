@@ -63,7 +63,7 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - name: Build
-        run: wasm-pack build --target bundler --release --scope hamd
+        run: wasm-pack build --target bundler --release
 
       - name: Publish
         working-directory: pkg
