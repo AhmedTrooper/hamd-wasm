@@ -36,10 +36,7 @@ pub(crate) fn unwrap(parsed: JsValue) -> Result<Unwrapped, JsValue> {
         return Ok(Unwrapped::Value(parsed));
     };
     let marker = js_sys::Reflect::get(&parsed, &JsValue::from_str("__hamd"))?;
-    let is_current_envelope = marker.as_string().as_deref() == Some(ENVELOPE_MARKER);
-    let is_legacy_envelope =
-        marker.is_undefined() && js_sys::Reflect::has(&parsed, &JsValue::from_str("__val"))?;
-    if !is_current_envelope && !is_legacy_envelope {
+    if marker.as_string().as_deref() != Some(ENVELOPE_MARKER) {
         return Ok(Unwrapped::Value(parsed));
     }
     if js_sys::Date::now() > expires_at {
