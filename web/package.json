@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ahmedtooper_npm/hamd-wasm": "^0.1.0",
     "solid-js": "^1.9.14"
   },
   "devDependencies": {
